@@ -11,8 +11,8 @@ ncfile_level = nc.Dataset(glob("mydata_levels_*.nc")[0])
 qv = ncfile_level["q"]
 
 
-profile_filename = "myprofile.txt"
-with open(profile_filename, "w") as file_writer:
+profile_file = "myprofile.txt"
+with open(profile_file, "w") as file_writer:
     header_lines = [
         "! Specify input profiles for example_fwd.F90.\n",
         "! Multiple profiles may be described: follow the same format for each one.\n",
@@ -23,13 +23,25 @@ with open(profile_filename, "w") as file_writer:
         "! 1 => kg/kg over moist air\n",
         "! 2 => ppmv over moist air\n",
         "!\n",
-        "2\n",
+        "1\n",
         "!\n",
     ]
     file_writer.writelines(header_lines)
 
+file_append = open(profile_file, "a")
+varshape = qv.shape
+#for tt in range(varshape[0]):
+for ii in range(varshape[2]): #latitudes
+    for jj in range(varshape[3]): #longitude
+        print(ii,jj)
+        file_append.write("! --- Profile 1 ---\n!\n")
+        for kk in range(varshape[1]):
+            file_append.write(str(qv[0,kk,ii,jj])+'\n')
+        exit()
 
-# with open(profile_filename, "a") as file_appender:
+file_append.close()
+
+# with open(profile_file, "a") as file_appender:
 #     file_appender.writelines(header_lines)
 
 # print(qv[:5, 22, 22, 22])
