@@ -28,10 +28,11 @@ def main_dm():
     my_year = years[0]
     my_month = months[0]
     my_day = days[0]
-    filename = "mydata_levels_"+my_year+"_"+my_month+"_"+my_day+".nc"
+    filename_level = "mydata_levels_"+my_year+"_"+my_month+"_"+my_day+".nc"
+    filename_surface = "mydata_surface_"+my_year+"_"+my_month+"_"+my_day+".nc"
     hours = [hour.zfill(2)+":00" for hour in hours000]
     c = cdsapi.Client()
-    mydata =     {
+    myData =     {
             'product_type': 'reanalysis',
             'variable': [
                 'specific_humidity', 'temperature', 
@@ -47,7 +48,23 @@ def main_dm():
             'area': [ north, west, south, east ],
             'format': 'netcdf',
         }
-    c.retrieve('reanalysis-era5-pressure-levels', mydata, filename)
+    print("Trying to download atmospheric profile data ...")
+    # c.retrieve('reanalysis-era5-pressure-levels', myData, filename_level)
+    myData =     {
+        'product_type': 'reanalysis',
+        'variable': [
+            '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature', '2m_temperature', 'surface_pressure',
+            'cloud_base_height', 'geopotential', 'lake_cover', 'land_sea_mask', 'skin_temperature', 'soil_type', 'total_cloud_cover', 
+        ],
+        'year': years,
+        'month': months,
+        'day': days,
+        'time': hours,
+        'area': [ north, west, south, east ],
+        'format': 'netcdf',
+    }
+    print("Trying to download surface data ...")
+    c.retrieve('reanalysis-era5-single-levels', myData, filename_surface)
 
 def check_integer(string_as_integer):
     try:
