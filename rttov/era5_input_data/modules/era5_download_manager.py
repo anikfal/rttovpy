@@ -1,11 +1,9 @@
-import cdsapi
-import yaml
-
 def main_dm():
+    import cdsapi
+    import yaml
     with open('input.yaml', 'r') as yaml_file:
         input_data = yaml.safe_load(yaml_file)
     years = read_check_comma(input_data, "time", "years")
-
     months = read_check_comma(input_data, "time", "months")
     days = read_check_comma(input_data, "time", "days")
     hours000 = read_check_comma(input_data, "time", "hours")
@@ -21,6 +19,7 @@ def main_dm():
     south = input_data["area"]["south_latitude"]
     west  = input_data["area"]["west_longitude"]
     east = input_data["area"]["east_longitude"]
+    areaName = input_data["area"]["name"]
     check_float(north)
     check_float(south)
     check_float(west)
@@ -28,8 +27,8 @@ def main_dm():
     my_year = years[0]
     my_month = months[0]
     my_day = days[0]
-    filename_level = "mydata_levels_"+my_year+"_"+my_month+"_"+my_day+".nc"
-    filename_surface = "mydata_surface_"+my_year+"_"+my_month+"_"+my_day+".nc"
+    filename_level = "era5data_pressure_levels_"+my_year+"_"+my_month+"_"+my_day+"_"+areaName+".nc"
+    filename_surface = "era5data_surface_level_"+my_year+"_"+my_month+"_"+my_day+"_"+areaName+".nc"
     hours = [hour.zfill(2)+":00" for hour in hours000]
     c = cdsapi.Client()
     myData =     {
@@ -48,13 +47,14 @@ def main_dm():
             'area': [ north, west, south, east ],
             'format': 'netcdf',
         }
-    print("Trying to download atmospheric profile data ...")
+    print("  Downloading ERA5 data on the atmospheric pressure levels ..")
+    print("-------------------------------------------------------------")
     # c.retrieve('reanalysis-era5-pressure-levels', myData, filename_level)
     myData =     {
         'product_type': 'reanalysis',
         'variable': [
-            '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature', '2m_temperature', 'surface_pressure',
-            'cloud_base_height', 'geopotential', 'lake_cover', 'land_sea_mask', 'skin_temperature', 'soil_type', 'total_cloud_cover', 
+            '2m_temperature', '2m_dewpoint_temperature', 'surface_pressure', '10m_u_component_of_wind', '10m_v_component_of_wind',
+            'skin_temperature', 'land_sea_mask', 'lake_cover', 'soil_type', 'geopotential', 'cloud_base_height', 'total_cloud_cover', 
         ],
         'year': years,
         'month': months,
@@ -63,7 +63,8 @@ def main_dm():
         'area': [ north, west, south, east ],
         'format': 'netcdf',
     }
-    print("Trying to download surface data ...")
+    print("  Downloading ERA5 surface data ..")
+    print("----------------------------------")
     c.retrieve('reanalysis-era5-single-levels', myData, filename_surface)
 
 def check_integer(string_as_integer):
