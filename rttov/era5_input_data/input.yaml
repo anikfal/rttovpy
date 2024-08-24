@@ -1,21 +1,24 @@
-time:
-  years: 2023
-  months: 3
-  days: 13
-  hours: 0,1,2,3,4,5,6,7,8,9,10,11,12
-  # hours: 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23
-  # hours: 0,1
+rttov_installation_path: /home/anikfal/WRFDA/rttov12
+rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/rttov7pred54L/rtcoef_noaa_16_avhrr.dat
+# rttov_coefficient_file: rtcoef_noaa_16_avhrr.dat
 
-area:
-  name: mediterrainean
-  north_latitude: 45
-  south_latitude: 37
-  west_longitude: -3
-  east_longitude: 19
+time_of_simulation:
+  year: 2023
+  month: 3
+  day: 13
+  hour: 12
 
-satellite_specifications:
-  satellite_name_index: 77
-  user_defined_angles:
+area_of_simulation:
+  domain_name: smalldomain
+  north_latitude: 55
+  south_latitude: 45
+  west_longitude: 0
+  east_longitude: 10
+
+satellite_information:
+  sat_name_index: 2
+  sat_channel_list: [1, 2, 3]
+  user_defined_position:
     enable: true
-    zenith_angle: 30
-    azimuth_angle: 0
+    sat_latitude: 50
+    sat_longitude: 5
