@@ -1,6 +1,11 @@
+## Code for downloading ERA5 data,and making RTTOV profile data based on the downloaded data,
+## As well as generating the shellscript for running the RTTOV model using the profile data
+## Author: Amirhossein Nikfal <https://github.com/anikfal>
+###############################################################################
+
 from modules import era5_download_manager, count_lines, application_shell
 from modules.conversions import surface_humidity
-import yaml
+import yaml, os
 import netCDF4 as nc
 from glob import glob
 import numpy as np
@@ -9,7 +14,6 @@ from pyorbital.orbital import Orbital
 from pyorbital.astronomy import get_alt_az
 from datetime import datetime
 from math import pi
-import os, sys
 
 with open('input.yaml', 'r') as yaml_file:
     inputFile = yaml.safe_load(yaml_file)
@@ -29,37 +33,37 @@ with open('satellite_names.yaml', 'r') as yaml_file:
     satNameFile = yaml.safe_load(yaml_file)
 # print("sat index:", satIndex, satNameFile[satIndex] )
 
-if(angleEnable):
-    print("Simulation with user defined satellite position:")
-    satLat = inputFile["satellite_information"]["user_defined_position"]['sat_latitude']
-    satLon = inputFile["satellite_information"]["user_defined_position"]['sat_longitude']
 
 filePrefix = inputFile["area_of_simulation"]["domain_name"]
 dirName = filePrefix+"_profiles/"
-era5_surface_file = glob("era5data_surface_level_*" + filePrefix + ".nc")[0]
-era5_level_file = glob("era5data_pressure_levels_*" + filePrefix + ".nc")[0]
+era5_surface_file000 = glob("era5data_surface_level_*" + filePrefix + ".nc")#[0]
+era5_level_file000 = glob("era5data_pressure_levels_*" + filePrefix + ".nc")#[0]
 rttovCoef = inputFile["rttov_coefficient_file_path"]
-
-
-
 
 
 if os.path.exists(dirName) and os.path.isdir(dirName):
     print("Using the previously downloaded data in", dirName, "to make the final shellscript application (run_era5_example_fwd.sh)")
-    varShape = count_lines.count_lines_between(dirName+"/prof-000001.dat", "! Pressure levels (hPa)", "! Temperature profile (K)") - 2
-    application_shell.make_final_application_shell(rttovCoef, str(varShape), satChannels, rttov_install_path)
+    profilesList000 = os.listdir(dirName)
+    profilesList = [var for var in profilesList000 if (var.startswith("prof-") and var.endswith(".dat"))]
+    pressureLevelsSize = count_lines.count_lines_between(dirName+profilesList[0], "! Pressure levels (hPa)", "! Temperature profile (K)") - 2
+    application_shell.make_final_application_shell(rttovCoef, str(pressureLevelsSize), satChannels, rttov_install_path)
     exit()
-if os.path.exists(era5_surface_file) and os.path.exists(era5_level_file):
-    print(f"  The files {era5_surface_file} and {era5_level_file} already exist and will be used to make profile data.")
-    print(f"  So no new ERA5 data will be downloaded.")
-else:
-    era5_download_manager.main_dm()
 
+try:
+    if os.path.exists(era5_surface_file000[0]) and os.path.exists(era5_level_file000[0]):
+        era5_surface_file = era5_surface_file000[0]
+        era5_level_file = era5_level_file000[0]
+        print(f"  The files {era5_surface_file} and {era5_level_file} already exist and will be used to make profile data.")
+        print(f"  So no new ERA5 data will be downloaded.")
+except:
+        era5_download_manager.main_dm()
 
+try:
+    os.makedirs(dirName)
+    print(f"Directory {dirName} has been created to store profile datafiles.")
+except Exception as error:
+    print(f"An error occurred while creating {dirName}: {error}")
 
-
-# with open('input.yaml', 'r') as yaml_file:
-#     input_data = yaml.safe_load(yaml_file)
 year = inputFile["time_of_simulation"]["year"]
 month = inputFile["time_of_simulation"]["month"]
 day = inputFile["time_of_simulation"]["day"]
@@ -69,7 +73,14 @@ orb = Orbital(satNameFile[satIndex])
 observationTime = datetime(year, month, day, hour)
 satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
 # satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
-satAlt = satPositions[2]
+satAltitude = satPositions[2]
+if(angleEnable):
+    print("Simulation with user defined satellite position:")
+    satLat = inputFile["satellite_information"]["user_defined_position"]['sat_latitude']
+    satLon = inputFile["satellite_information"]["user_defined_position"]['sat_longitude']
+else:
+    satLat = satPositions[1]
+    satLon = satPositions[0]
 
 ncFile_surface = nc.Dataset(era5_surface_file)
 t2m = np.round(ncFile_surface["t2m"], 4)
@@ -97,35 +108,24 @@ tempLevel = np.round(ncFile_level["t"], 4)
 levelVar = list(ncFile_level.dimensions)[1]
 pressureLevels = ncFile_level[levelVar]
 
-
-application_shell.make_final_application_shell()
-
-
-# try:
-#     os.makedirs(dirName)
-#     print(f"Directory {dirName} has been created to store profile datafiles.")
-# except FileExistsError:
-#     print(f"Warning: directory {dirName} to store profile datafiles, already exist.")
-#     print("Exiting ..")
-#     exit()
-# except Exception as error:
-#     print(f"An error occurred: {error}")
-
-
 tt = 0
 profileCount = 1
 jjmax = varShape[2]
 iimax = varShape[3]
 for jj in range(jjmax): #latitudesTemperature profile (K)
     for ii in range(iimax): #longitude
-# for jj in range(5): #latitudesTemperature profile (K)
-#     for ii in range(5): #longitude
-        print("  jj:", jj, "ii:", ii)
-        profileIndexNaming = f"j and i = {jj}/{jjmax} and {ii}/{iimax}"
+# for jj in range(5, 10): #latitudesTemperature profile (K)
+#     for ii in range(iimax): #longitude
+        jjcount = jj+1
+        iicount = ii+1
+        print("Creating profile data for the grid point jj:", jjcount, "ii:", iicount)
+        profileIndexNaming = f"j and i = {jjcount}/{jjmax} and {iicount}/{iimax}"
         profile_file = f"prof-{profileCount:06}.dat"
         profileCount = profileCount + 1
         with open(profile_file, "w") as file_writer:
             header_lines = [
+                f"! jj, ii, {jjcount}, {iicount}\n",
+                f"! jjSize, iiSize, {jjmax}, {iimax}\n",
                 "! Specify input profiles for example_fwd.F90.\n",
                 "! Multiple profiles may be described: follow the same format for each one.\n",
                 "! Comment lines (starting with '!') are optional.\n",
@@ -225,7 +225,7 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
             ]
         for line in subHead:
             file_append.write(line)
-        userdefSatPos = get_observer_look(satLon, satLat, satAlt, observationTime, lon[ii], lat[jj], observerAltitude)
+        userdefSatPos = get_observer_look(satLon, satLat, satAltitude, observationTime, lon[ii], lat[jj], observerAltitude)
         satAzimuth = userdefSatPos[0]
         satZenith = 90 - userdefSatPos[1]
         sunPositions = get_alt_az(observationTime, lon[ii], lat[jj])
@@ -260,3 +260,5 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
             exit()
         # exit()
         file_append.close()
+
+application_shell.make_final_application_shell(rttovCoef, str(varShape[1]), satChannels, rttov_install_path)

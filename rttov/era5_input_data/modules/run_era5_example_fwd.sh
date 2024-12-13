@@ -1,9 +1,6 @@
 #!/bin/sh
 # Script to run the example_fwd.F90 example program
-#
-# The result is compared to a reference file.
 # 
-# This script runs only ONE test for NOAA-16 AVHRR
 
 # Set BIN directory if supplied
 BIN=$(perl -e 'for(@ARGV){m/^BIN=(\S+)$/o && print "$1";}' $*)
@@ -11,7 +8,6 @@ if [ "x$BIN" = "x" ]
 then
   BIN=bin
 fi
-
 
 TEST_DIR=/home/myname/WRFDA/rttov12/rttov_test/test_example.1
 dom_name=`sed -n '/domain_name/ p' input.yaml | awk '{print $2}'`
@@ -22,7 +18,19 @@ if [ -d "$outputDir" ]; then
 fi
 mkdir $outputDir
 
-for myprofile in $profile_directory/*; do
+for myprofile in $profile_directory/prof-*.dat; do
+  ARG_ARCH=$(perl -e 'for(@ARGV){m/^ARCH=(\S+)$/o && print "$1";}' $*)
+  if [ ! "x$ARG_ARCH" = "x" ]; then
+    ARCH=$ARG_ARCH
+  fi
+  if [ "x$ARCH" = "x" ];
+  then
+    echo 'Please supply ARCH and run again.'
+    echo 'For example, if RTTOV is compiled with gfortran, run it as below:'
+    echo "$0 ARCH=gfortran"
+    exit
+  fi
+
   filePath=`realpath $myprofile`
   profileName=`basename $myprofile`
   echo Simulating based on $filePath
@@ -42,23 +50,9 @@ for myprofile in $profile_directory/*; do
   NCHAN=3                                   # Number of channels to simulate for each profile
   CHAN_LIST="1 2 3"
   NTHREADS=1                                # Number of threads to use (compile RTTOV with OpenMP to exploit this)
-  CHECK_REF=1                               # Set to 0 to omit check against test reference
 
   # Paths relative to the rttov_test/${TEST_DIR} directory:
   BIN_DIR=../../$BIN                           # BIN directory (may be set with BIN= argument)
-  REF_TEST_DIR=../test_example.2               # Test reference data
-
-  ########################################################################
-
-  ARG_ARCH=$(perl -e 'for(@ARGV){m/^ARCH=(\S+)$/o && print "$1";}' $*)
-  if [ ! "x$ARG_ARCH" = "x" ]; then
-    ARCH=$ARG_ARCH
-  fi
-  if [ "x$ARCH" = "x" ];
-  then
-    echo 'Please supply ARCH'
-    exit 1
-  fi
 
   CWD=$(pwd)
   cd $TEST_DIR
@@ -67,15 +61,6 @@ for myprofile in $profile_directory/*; do
   echo " "
   echo " Test forward "
   echo " "
-
-  # echo  "Coef filename:      ${COEF_FILENAME}"
-  # echo  "Input profile file: ${PROF_FILENAME}"
-  # echo  "Number of profiles: ${NPROF}"
-  # echo  "Number of levels:   ${NLEVELS}"
-  # echo  "Do solar:           ${DO_SOLAR}"
-  # echo  "Number of channels: ${NCHAN}"
-  # echo  "Channel list:       ${CHAN_LIST}"
-  # echo  "Number of threads:  ${NTHREADS}"
 
 $BIN_DIR/example_fwd.exe << EOF
 "${COEF_FILENAME}", Coefficient filename
@@ -93,7 +78,7 @@ if [ $? -eq 0 ]; then
   mv $TEST_DIR/output_example_fwd.dat $outputDir/output_example_fwd.dat_$profileName
 else
   echo "Profile data " $profileName " has an issue (zenith angle > 75, etc)."
-  echo "Skipping this profile data with missing value output."
+  echo "Skipping this profile, and filling with missing value."
   echo "missing_value" > $CWD/$outputDir/output_example_fwd.dat_$profileName
 fi
 cd $CWD
