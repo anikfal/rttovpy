@@ -1,0 +1,17 @@
+rttov_installation_path: /home/anikfal/WRFDA/rttov12
+rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/rttov7pred54L/rtcoef_noaa_16_avhrr.dat
+wrf_file_path: /home/anikfal/postwrf/wrfout_d01_2023-12-17_12:00:00
+
+time_of_simulation:
+  year: 2023
+  month: 12
+  day: 17
+  hour: 20
+
+satellite_information:
+  sat_name_index: 2
+  sat_channel_list: [1, 2, 3]
+  user_defined_position:
+    enable: true
+    sat_latitude: 50
+    sat_longitude: 5
