@@ -3,7 +3,7 @@
 ## Author: Amirhossein Nikfal <https://github.com/anikfal>
 ###############################################################################
 
-from modules import count_lines, application_shell
+from modules import count_lines, application_shell, dew
 from modules.conversions import surface_humidity
 import yaml, os
 import netCDF4 as nc
@@ -14,6 +14,9 @@ from pyorbital.orbital import Orbital
 from pyorbital.astronomy import get_alt_az
 from datetime import datetime, timedelta
 from math import pi
+from wrf import getvar, disable_xarray, ALL_TIMES
+disable_xarray()
+
 
 with open('namelist_wrf.yaml', 'r') as yaml_file:
     namelist = yaml.safe_load(yaml_file)
@@ -39,9 +42,6 @@ if not os.path.exists(wrfFilePath):
     print("Warning:", wrfFilePath, "is not a valid file path.")
     print("Exiting ..")
 
-print(wrfFileName)
-
-
 dirName = wrfFileName+"_profiles/"
 rttovCoef = namelist["rttov_coefficient_file_path"]
 
@@ -55,8 +55,9 @@ if os.path.exists(dirName) and os.path.isdir(dirName):
     exit()
 
 try:
+    pass
     # os.makedirs(dirName)
-    print(f"Directory {dirName} has been created to store profile datafiles.")
+    # print(f"Directory {dirName} has been created to store profile datafiles.")
 except Exception as error:
     print(f"An error occurred while creating {dirName}: {error}")
 
@@ -75,15 +76,14 @@ month = namelist["time_of_simulation"]["month"]
 day = namelist["time_of_simulation"]["day"]
 hour = namelist["time_of_simulation"]["hour"]
 observationTime = datetime(year, month, day, hour)
-observationIndex000 = (observationTime - startDate)/ (60*int(minuteArr[1]))
-observationIndex = int(observationIndex000.total_seconds()) - 1
-
 if not startDate <= observationTime <= endDate:
     print("!!!!!!!!!!!!!!!!!!!")
     print(f"Warning: {observationTime} is not among the time-slots of {wrfFileName} (must be between {startDate} and {endDate}).")
     print("Exiting ..")
     exit()
 
+observationIndex000 = (observationTime - startDate)/ (60*int(minuteArr[1]))
+observationIndex = int(observationIndex000.total_seconds()) - 1
 # orb = Orbital(satNameFile[satIndex])
 # satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
 satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
@@ -97,35 +97,62 @@ else:
     satLon = satPositions[0]
 
 
-t2m = np.round(wrffile["t2m"], 4)
+# t2m = np.round(wrffile["T2"], 4)[observationIndex, :, :]
+t2m = getvar(wrffile, "T2", timeidx=observationIndex)
+d2m = getvar(wrffile, "td2", timeidx=observationIndex)+273.15
+# p = np.round(wrffile["P"], 4)[observationIndex, :, :, :]
+# p = getvar(wrffile, "P", timeidx=observationIndex)
+# pb = getvar(wrffile, "PB", timeidx=observationIndex)
+# pb = np.round(wrffile["PB"], 4)[observationIndex, :, :, :]
+# p = p + pb
+# qvapor = np.round(wrffile["QVAPOR"], 4)[observationIndex, :, :, :]
+qv = getvar(wrffile, "QVAPOR", timeidx=observationIndex)
+p = getvar(wrffile, "p", timeidx=observationIndex)
+p2m = p[0,:,:]
+u10 = getvar(wrffile, "U10", timeidx=observationIndex)
+v10 = getvar(wrffile, "V10", timeidx=observationIndex)
+skinT = getvar(wrffile, "TSK", timeidx=observationIndex)
+landSeaMask = getvar(wrffile, "LANDMASK", timeidx=observationIndex)
+lakeCover = getvar(wrffile, "LAKEMASK", timeidx=observationIndex)
+geopotential = getvar(wrffile, "HGT", timeidx=observationIndex) #altitude
+cloudFraction000 = getvar(wrffile, "cloudfrac", timeidx=observationIndex)
+cloudFraction = np.maximum.reduce([cloudFraction000[0,:,:], cloudFraction000[1,:,:], cloudFraction000[2,:,:]]) #maximum values
+q2m = qv[0,:,:]
+lat = getvar(wrffile, "lat", timeidx=observationIndex)
+lon = getvar(wrffile, "lon", timeidx=observationIndex)
+
+tempLevel = getvar(wrffile, "tk", timeidx=observationIndex)
+
+
+
+# d2m = np.round(wrffile["d2m"], 4)
+# p2m = np.round(wrffile["sp"], 4)
+# u10 = np.round(wrffile["u10"], 4)
+# v10 = np.round(wrffile["v10"], 4)
+# skinT = np.round(wrffile["skt"], 4)
+# landSeaMask = np.round(wrffile["lsm"], 0)
+# lakeCover = wrffile["cl"]
+# geopotential = np.round(wrffile["z"], 4)
+# # cloudBase = wrffile["cbh"]
+# cloudFraction = wrffile["tcc"]
+# q2m = np.round(surface_humidity(t2m[:], p2m[:]), 4)
+
+# lat = wrffile['latitude']
+# lon = wrffile['longitude']
+
+
+# ncFile_level = nc.Dataset(era5_level_file)
+# temperature000 = np.round(ncFile_level["t"], 4)
+# qv = np.round(ncFile_level["q"], 5)
+varShape = qv.shape
+# tempLevel = np.round(ncFile_level["t"], 4)
+# levelVar = list(ncFile_level.dimensions)[1]
+# pressureLevels = ncFile_level[levelVar]
+pressureLevels = p/100 #hpa
 
 
 exit()
 
-
-d2m = np.round(wrffile["d2m"], 4)
-p2m = np.round(wrffile["sp"], 4)
-u10 = np.round(wrffile["u10"], 4)
-v10 = np.round(wrffile["v10"], 4)
-skinT = np.round(wrffile["skt"], 4)
-landSeaMask = np.round(wrffile["lsm"], 0)
-lakeCover = wrffile["cl"]
-soilType = wrffile["slt"]
-geopotential = np.round(wrffile["z"], 4)
-# cloudBase = wrffile["cbh"]
-cloudFraction = wrffile["tcc"]
-q2m = np.round(surface_humidity(t2m[:], p2m[:]), 4)
-
-lat = wrffile['latitude']
-lon = wrffile['longitude']
-
-ncFile_level = nc.Dataset(era5_level_file)
-temperature000 = np.round(ncFile_level["t"], 4)
-qv = np.round(ncFile_level["q"], 5)
-varShape = qv.shape
-tempLevel = np.round(ncFile_level["t"], 4)
-levelVar = list(ncFile_level.dimensions)[1]
-pressureLevels = ncFile_level[levelVar]
 
 tt = 0
 profileCount = 1
