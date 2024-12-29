@@ -3,18 +3,16 @@
 ## Author: Amirhossein Nikfal <https://github.com/anikfal>
 ###############################################################################
 
-from modules import count_lines, application_shell, dew
-from modules.conversions import surface_humidity
+from modules import count_lines, application_shell
 import yaml, os
 import netCDF4 as nc
-from glob import glob
 import numpy as np
 from pyorbital.orbital import get_observer_look
 from pyorbital.orbital import Orbital
 from pyorbital.astronomy import get_alt_az
 from datetime import datetime, timedelta
 from math import pi
-from wrf import getvar, disable_xarray, ALL_TIMES
+from wrf import getvar, disable_xarray
 disable_xarray()
 
 
@@ -42,22 +40,23 @@ if not os.path.exists(wrfFilePath):
     print("Warning:", wrfFilePath, "is not a valid file path.")
     print("Exiting ..")
 
-dirName = wrfFileName+"_profiles/"
+dirnameSuffix = namelist["profiles_direname_suffix"]
+dirName = wrfFileName+dirnameSuffix+"/"
 rttovCoef = namelist["rttov_coefficient_file_path"]
 
-
 if os.path.exists(dirName) and os.path.isdir(dirName):
-    print("Using the previously downloaded data in", dirName, "to make the final shellscript application (run_era5_example_fwd.sh)")
+    print("- Using the previously downloaded data in", dirName, "to make the final RTTOV shell application")
     profilesList000 = os.listdir(dirName)
     profilesList = [var for var in profilesList000 if (var.startswith("prof-") and var.endswith(".dat"))]
     pressureLevelsSize = count_lines.count_lines_between(dirName+profilesList[0], "! Pressure levels (hPa)", "! Temperature profile (K)") - 2
     application_shell.make_final_application_shell(rttovCoef, str(pressureLevelsSize), satChannels, rttov_install_path)
+    print("- The file 'run_era5_example_fwd.sh' has been made")
     exit()
 
 try:
     pass
-    # os.makedirs(dirName)
-    # print(f"Directory {dirName} has been created to store profile datafiles.")
+    os.makedirs(dirName)
+    print(f"Directory {dirName} has been created to store profile datafiles.")
 except Exception as error:
     print(f"An error occurred while creating {dirName}: {error}")
 
@@ -96,78 +95,40 @@ else:
     satLat = satPositions[1]
     satLon = satPositions[0]
 
-
-# t2m = np.round(wrffile["T2"], 4)[observationIndex, :, :]
 t2m = getvar(wrffile, "T2", timeidx=observationIndex)
 d2m = getvar(wrffile, "td2", timeidx=observationIndex)+273.15
-# p = np.round(wrffile["P"], 4)[observationIndex, :, :, :]
-# p = getvar(wrffile, "P", timeidx=observationIndex)
-# pb = getvar(wrffile, "PB", timeidx=observationIndex)
-# pb = np.round(wrffile["PB"], 4)[observationIndex, :, :, :]
-# p = p + pb
-# qvapor = np.round(wrffile["QVAPOR"], 4)[observationIndex, :, :, :]
 qv = getvar(wrffile, "QVAPOR", timeidx=observationIndex)
 p = getvar(wrffile, "p", timeidx=observationIndex)
 p2m = p[0,:,:]
 u10 = getvar(wrffile, "U10", timeidx=observationIndex)
 v10 = getvar(wrffile, "V10", timeidx=observationIndex)
 skinT = getvar(wrffile, "TSK", timeidx=observationIndex)
-landSeaMask = getvar(wrffile, "LANDMASK", timeidx=observationIndex)
 lakeCover = getvar(wrffile, "LAKEMASK", timeidx=observationIndex)
-geopotential = getvar(wrffile, "HGT", timeidx=observationIndex) #altitude
+modelheight = getvar(wrffile, "HGT", timeidx=observationIndex) #altitude
 cloudFraction000 = getvar(wrffile, "cloudfrac", timeidx=observationIndex)
 cloudFraction = np.maximum.reduce([cloudFraction000[0,:,:], cloudFraction000[1,:,:], cloudFraction000[2,:,:]]) #maximum values
 q2m = qv[0,:,:]
 lat = getvar(wrffile, "lat", timeidx=observationIndex)
 lon = getvar(wrffile, "lon", timeidx=observationIndex)
-
 tempLevel = getvar(wrffile, "tk", timeidx=observationIndex)
 
-
-
-# d2m = np.round(wrffile["d2m"], 4)
-# p2m = np.round(wrffile["sp"], 4)
-# u10 = np.round(wrffile["u10"], 4)
-# v10 = np.round(wrffile["v10"], 4)
-# skinT = np.round(wrffile["skt"], 4)
-# landSeaMask = np.round(wrffile["lsm"], 0)
-# lakeCover = wrffile["cl"]
-# geopotential = np.round(wrffile["z"], 4)
-# # cloudBase = wrffile["cbh"]
-# cloudFraction = wrffile["tcc"]
-# q2m = np.round(surface_humidity(t2m[:], p2m[:]), 4)
-
-# lat = wrffile['latitude']
-# lon = wrffile['longitude']
-
-
-# ncFile_level = nc.Dataset(era5_level_file)
-# temperature000 = np.round(ncFile_level["t"], 4)
-# qv = np.round(ncFile_level["q"], 5)
 varShape = qv.shape
-# tempLevel = np.round(ncFile_level["t"], 4)
-# levelVar = list(ncFile_level.dimensions)[1]
-# pressureLevels = ncFile_level[levelVar]
 pressureLevels = p/100 #hpa
 
-
-exit()
-
-
-tt = 0
 profileCount = 1
-jjmax = varShape[2]
-iimax = varShape[3]
+jjmax = varShape[1]
+iimax = varShape[2]
 for jj in range(jjmax): #latitudesTemperature profile (K)
     for ii in range(iimax): #longitude
-# for jj in range(5, 10): #latitudesTemperature profile (K)
-#     for ii in range(iimax): #longitude
+# for jj in range(3): #latitudesTemperature profile (K)
+#     for ii in range(2): #longitude
         jjcount = jj+1
         iicount = ii+1
         print("Creating profile data for the grid point jj:", jjcount, "ii:", iicount)
         profileIndexNaming = f"j and i = {jjcount}/{jjmax} and {iicount}/{iimax}"
         profile_file = f"prof-{profileCount:06}.dat"
         profileCount = profileCount + 1
+
         with open(profile_file, "w") as file_writer:
             header_lines = [
                 f"! jj, ii, {jjcount}, {iicount}\n",
@@ -188,6 +149,7 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
         file_append = open(profile_file, "a")
         file_append.write("! --- Start of profile ---" + "\n")
         file_append.write("! --- Grid point with " + profileIndexNaming + " ---" + "\n")
+
         subHead = [
                 "!\n",
                 "! Pressure levels (hPa)\n"
@@ -195,9 +157,10 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
             ]
         for line in subHead:
             file_append.write(line)
-        levelRange = list(range(varShape[1]))[::-1]
+        levelRange = list(range(varShape[0]))[::-1]
         for level in levelRange:
-            file_append.write(str(pressureLevels[level])+'\n')
+            file_append.write(str(pressureLevels[level,jj,ii])+'\n')
+
         subHead = [
                 "!\n",
                 "! Temperature profile (K)\n"
@@ -206,8 +169,10 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
         for line in subHead:
             file_append.write(line)
         for level in levelRange:
-            pointValue = tempLevel[tt,level,jj,ii]
+            # pointValue = tempLevel[tt,level,jj,ii]
+            pointValue = tempLevel[level,jj,ii]
             file_append.write(str(pointValue)+'\n')
+        
         subHead = [
                 "!\n",
                 "! Water vapour profile (kg/kg)\n"
@@ -216,10 +181,11 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
         for line in subHead:
             file_append.write(line)
         for level in levelRange:
-            pointValue = qv[0,level,jj,ii]
+            pointValue = qv[level,jj,ii]
             if pointValue < 0.00001:
                 pointValue = np.float64(0.00001)
             file_append.write(np.array2string(pointValue, formatter={'float_kind':lambda x: f"{x:.{5}f}"})+'\n')
+
         subHead = [
                 "!\n",
                 "! Near-surface variables:\n"
@@ -228,10 +194,11 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
             ]
         for line in subHead:
             file_append.write(line)
-        near_surface_vars = [t2m[tt, jj, ii], q2m[tt, jj, ii], p2m[tt, jj, ii]/100,\
-                              u10[tt, jj, ii], v10[tt, jj, ii], 100000]
+        near_surface_vars = [t2m[jj, ii], q2m[jj, ii], p2m[jj, ii]/100,\
+                              u10[jj, ii], v10[jj, ii], 100000]
         near_surface_vars_2line = ' '.join(map(str, near_surface_vars))
         file_append.write(near_surface_vars_2line)
+
         subHead = [
                 "\n!\n",
                 "! Skin variables:\n"
@@ -240,9 +207,10 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
             ]
         for line in subHead:
             file_append.write(line)
-        skinVars = [skinT[tt, jj, ii], 35.0, 3.0, 5.0, 15.0, 0.1, 0.3]
+        skinVars = [skinT[jj, ii], 35.0, 3.0, 5.0, 15.0, 0.1, 0.3]
         skinVars_2line = ' '.join(map(str, skinVars))
         file_append.write(skinVars_2line)
+
         subHead = [
                 "\n!\n",
                 "! Surface type (0=land, 1=sea, 2=sea-ice) and water type (0=fresh, 1=ocean)\n"
@@ -250,9 +218,10 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
             ]
         for line in subHead:
             file_append.write(line)
-        surfaceType = [int(landSeaMask[tt, jj, ii]), 1]
+        surfaceType = [int(lakeCover[jj, ii]), 1]
         surfaceType_2line = ' '.join(map(str, surfaceType))
         file_append.write(surfaceType_2line)
+
         subHead = [
                 "\n!\n",
                 "! Elevation (km), latitude and longitude (degrees)\n"
@@ -260,10 +229,12 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
             ]
         for line in subHead:
             file_append.write(line)
-        observerAltitude = np.round(geopotential[tt, jj, ii]/9810, 4)
-        elevation = [observerAltitude, lat[jj], lon[ii]]
+        # observerAltitude = np.round(modelheight[jj, ii]/9810, 4)
+        observerAltitude = modelheight[jj, ii]/1000
+        elevation = [observerAltitude, lat[jj, ii], lon[jj, ii]]
         elevation_2line = ' '.join(map(str, elevation))
         file_append.write(elevation_2line)
+
         subHead = [
                 "\n!\n",
                 "! Sat. zenith and azimuth angles, solar zenith and azimuth angles (degrees)\n"
@@ -271,10 +242,10 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
             ]
         for line in subHead:
             file_append.write(line)
-        userdefSatPos = get_observer_look(satLon, satLat, satAltitude, observationTime, lon[ii], lat[jj], observerAltitude)
+        userdefSatPos = get_observer_look(satLon, satLat, satAltitude, observationTime, lon[jj, ii], lat[jj, ii], observerAltitude)
         satAzimuth = userdefSatPos[0]
         satZenith = 90 - userdefSatPos[1]
-        sunPositions = get_alt_az(observationTime, lon[ii], lat[jj])
+        sunPositions = get_alt_az(observationTime, lon[jj, ii], lat[jj, ii])
         sunZenith = sunPositions[0] * 180/pi
         sunAzimuth = sunPositions[1] * 180/pi
         satsunAngles = np.round([satZenith, satAzimuth, sunZenith, sunAzimuth], 2)
@@ -287,9 +258,10 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
             ]
         for line in subHead:
             file_append.write(line)
-        cloudinfo = [500, cloudFraction[tt, jj, ii]]
+        cloudinfo = [500, cloudFraction[jj, ii]]
         cloudinfo_2line = ' '.join(map(str, cloudinfo))
         file_append.write(cloudinfo_2line)
+        
         subHead = [
                 "\n!\n",
                 "! --- End of profile " + profileIndexNaming + " ---" + "\n"
@@ -304,7 +276,11 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
             print(f"An error occurred: {error}")
             print("Exiting ..")
             exit()
-        # exit()
+
         file_append.close()
 
-application_shell.make_final_application_shell(rttovCoef, str(varShape[1]), satChannels, rttov_install_path)
+print("")
+print("==================================================================")
+print("Making the shellscript application for the RTTOV forward model ...")
+application_shell.make_final_application_shell(rttovCoef, str(varShape[0]), satChannels, rttov_install_path)
+print("The file run_era5_example_fwd.sh has been made successfully.")

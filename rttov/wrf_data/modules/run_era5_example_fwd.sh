@@ -9,10 +9,12 @@ then
   BIN=bin
 fi
 
-TEST_DIR=/home/myname/WRFDA/rttov12/rttov_test/test_example.1
-dom_name=`sed -n '/domain_name/ p' input.yaml | awk '{print $2}'`
-profile_directory=$dom_name"_profiles"
-outputDir=$dom_name"_outputs"
+homeDir=/home/anikfal/WRFDA/atmospheric_science/rttov/wrf_data/
+TEST_DIR=/home/anikfal/WRFDA/rttov12/rttov_test/test_example.1
+wrffilename=`basename $(sed -n '/wrf_file_path/ p' namelist_wrf.yaml | awk '{print $2}')`
+dom_name=`sed -n '/profiles_direname_suffix/ p' namelist_wrf.yaml | awk '{print $2}'`
+profile_directory=$homeDir$wrffilename$dom_name
+outputDir=$wrffilename"_rttov_outputs"
 if [ -d "$outputDir" ]; then
     rm -rf "$outputDir"
 fi

@@ -4,6 +4,7 @@ def make_final_application_shell(rttovCoef, varShape, satChannels, rttov_install
         runScript = file.readlines()
     file.close()
     for index, line in enumerate(runScript):
+        line = line.lstrip() #remove indentation spaces
         if line.startswith('COEF_FILENAME='):
             runScript[index] = 'COEF_FILENAME='+rttovCoef+'\n'
         if line.startswith('NLEVELS='):
@@ -12,6 +13,8 @@ def make_final_application_shell(rttovCoef, varShape, satChannels, rttov_install
             runScript[index] = 'CHAN_LIST="'+satChannels+'"\n'
         if line.startswith('TEST_DIR='):
             runScript[index] = 'TEST_DIR='+rttov_install_path+'/rttov_test/test_example.1\n'
+        if line.startswith('homeDir='):
+            runScript[index] = 'homeDir='+os.getcwd()+'/\n'
     with open('run_era5_example_fwd.sh', 'w') as rttovRunFile:
         rttovRunFile.writelines(runScript)
         os.chmod('run_era5_example_fwd.sh', 0o755)
