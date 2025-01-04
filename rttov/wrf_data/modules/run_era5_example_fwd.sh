@@ -12,9 +12,10 @@ fi
 homeDir=/home/anikfal/WRFDA/atmospheric_science/rttov/wrf_data/
 TEST_DIR=/home/anikfal/WRFDA/rttov12/rttov_test/test_example.1
 wrffilename=`basename $(sed -n '/wrf_file_path/ p' namelist_wrf.yaml | awk '{print $2}')`
-dom_name=`sed -n '/profiles_direname_suffix/ p' namelist_wrf.yaml | awk '{print $2}'`
-profile_directory=$homeDir$wrffilename$dom_name
-outputDir=$wrffilename"_rttov_outputs"
+inputDirSuffix=`sed -n '/rttov_inputdata_directory_suffix/ p' namelist_wrf.yaml | awk '{print $2}'`
+rttov_output_dir_name=`sed -n '/rttov_outputdata_directory_suffix/ p' namelist_wrf.yaml | awk '{print $2}'`
+profile_directory=$homeDir$wrffilename"_"$inputDirSuffix
+outputDir=$wrffilename"_"$rttov_output_dir_name
 if [ -d "$outputDir" ]; then
     rm -rf "$outputDir"
 fi

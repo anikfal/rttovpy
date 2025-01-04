@@ -8,12 +8,17 @@ time_of_simulation:
   day: 18
   hour: 10
 
-profiles_direname_suffix: _profiles  #Default suffix, appending to the WRF filename. You don't have to change it.
+rttov_inputdata_directory_suffix: rttov_inputs  #Directory suffix, appending to the WRF filename. You don't have to change it.
+rttov_outputdata_directory_suffix: rttov_outputs #Default directory suffix. No need to be changed.
 
 satellite_information:
   sat_name_index: 2
   sat_channel_list: [1, 2, 3]
+  sat_channel_name_prefix: band #Default band name. No need to be changed
   user_defined_position:
     enable: true
     sat_latitude: 33
     sat_longitude: 55
+
+postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs.
+  enable: true
