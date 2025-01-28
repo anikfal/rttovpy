@@ -8,17 +8,24 @@ time_of_simulation:
   day: 18
   hour: 10
 
-rttov_inputdata_directory_suffix: rttov_inputs  #Directory suffix, appending to the WRF filename. You don't have to change it.
+rttov_inputdata_directory_suffix: rttov_inputs  #Directory suffix, appending to the WRF filename. No need to be changed.
 rttov_outputdata_directory_suffix: rttov_outputs #Default directory suffix. No need to be changed.
 
 satellite_information:
   sat_name_index: 2
   sat_channel_list: [1, 2, 3]
-  sat_channel_name_prefix: band #Default band name. No need to be changed
+  sat_channel_names: [red, green, blue] #Default band name. No need to be changed
   user_defined_position:
-    enable: true
+    enabled: true
     sat_latitude: 33
     sat_longitude: 55
 
 postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs.
-  enable: true
+  enabled: true
+  postprocessing_directory_suffix: rttov_outputs_postprocessing #Default directory suffix. No need to be changed.
+  image_plot_all_bands: true
+  RGB_plot_brightness_temperature:
+    enabled: true
+    Red: red + green
+    Green: green
+    Blue: blue
