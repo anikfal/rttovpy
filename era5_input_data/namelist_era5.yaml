@@ -1,6 +1,5 @@
 rttov_installation_path: /home/anikfal/WRFDA/rttov12
 rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/rttov7pred54L/rtcoef_noaa_16_avhrr.dat
-# rttov_coefficient_file: rtcoef_noaa_16_avhrr.dat
 
 time_of_simulation:
   year: 2023

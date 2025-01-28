@@ -15,7 +15,7 @@ from pyorbital.astronomy import get_alt_az
 from datetime import datetime
 from math import pi
 
-with open('input.yaml', 'r') as yaml_file:
+with open('namelist_era5.yaml', 'r') as yaml_file:
     inputFile = yaml.safe_load(yaml_file)
 satIndex = inputFile["satellite_information"]["sat_name_index"]
 satChannels000 = inputFile["satellite_information"]["sat_channel_list"]
