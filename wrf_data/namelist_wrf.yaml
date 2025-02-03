@@ -21,11 +21,11 @@ satellite_information:
     sat_longitude: 55
 
 postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs.
-  enabled: true
+  enabled: false
   postprocessing_directory_suffix: rttov_outputs_postprocessing #Default directory suffix. No need to be changed.
-  image_plot_all_bands: true
+  image_plot_all_bands: false
   RGB_plot_brightness_temperature:
-    enabled: true
+    enabled: false
     Red: red + green
     Green: green
     Blue: blue
