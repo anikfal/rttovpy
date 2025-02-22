@@ -1,15 +1,20 @@
 rttov_installation_path: /home/anikfal/WRFDA/rttov12
 rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/rttov7pred54L/rtcoef_noaa_16_avhrr.dat
-wrf_file_path: /home/anikfal/postwrf/wrfout_d01_2023-12-17_12:00:00
+wrf_file_path: /home/anikfal/postwrf/wrfout_d01_2022-05-15_00
 
 time_of_simulation:
-  year: 2023
-  month: 12
-  day: 18
-  hour: 10
+  year: 2022
+  month: 5
+  day: 16
+  hour: 0
+
 
 rttov_inputdata_directory_suffix: rttov_inputs  #Directory suffix, appending to the WRF filename. No need to be changed.
 rttov_outputdata_directory_suffix: rttov_outputs #Default directory suffix. No need to be changed.
+
+wrfchem_dust_profiles:
+  enabled: true
+  aerosol_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/cldaer_ir/scaercoef_eos_1_modis.dat
 
 satellite_information:
   sat_name_index: 2
