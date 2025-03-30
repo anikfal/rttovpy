@@ -2,6 +2,16 @@
 ## As well as generating the shellscript for running the RTTOV model using the profile data
 ## Author: Amirhossein Nikfal <https://github.com/anikfal>
 ###############################################################################
+import importlib
+required_modules = ["numpy", "yaml", "netCDF4", "pyorbital"]
+for module in required_modules:
+    try:
+        importlib.import_module(module)
+    except:
+        print("Warning: The Python module", module, "is not installed.")
+        print("Install it and run again.")
+        print("Exiting ..")
+        exit()
 
 from modules import era5_download_manager, count_lines, application_shell
 from modules.conversions import surface_humidity
@@ -31,7 +41,6 @@ angleEnable = inputFile["satellite_information"]["user_defined_position"]['enabl
 
 with open('satellite_names.yaml', 'r') as yaml_file:
     satNameFile = yaml.safe_load(yaml_file)
-# print("sat index:", satIndex, satNameFile[satIndex] )
 
 
 filePrefix = inputFile["area_of_simulation"]["domain_name"]
@@ -57,6 +66,8 @@ try:
         print(f"  So no new ERA5 data will be downloaded.")
 except:
         era5_download_manager.main_dm()
+        era5_surface_file = glob("era5data_surface_level_*" + filePrefix + ".nc")[0]
+        era5_level_file = glob("era5data_pressure_levels_*" + filePrefix + ".nc")[0]
 
 try:
     os.makedirs(dirName)
@@ -72,7 +83,7 @@ hour = inputFile["time_of_simulation"]["hour"]
 orb = Orbital(satNameFile[satIndex])
 observationTime = datetime(year, month, day, hour)
 satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
-# satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
+#satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
 satAltitude = satPositions[2]
 if(angleEnable):
     print("Simulation with user defined satellite position:")
@@ -225,13 +236,13 @@ for jj in range(jjmax): #latitudesTemperature profile (K)
             ]
         for line in subHead:
             file_append.write(line)
-        userdefSatPos = get_observer_look(satLon, satLat, satAltitude, observationTime, lon[ii], lat[jj], observerAltitude)
+        userdefSatPos = get_observer_look(satLon, satLat, satAltitude, observationTime, np.array([lon[ii]]), np.array([lat[jj]]), np.array([observerAltitude]))
         satAzimuth = userdefSatPos[0]
         satZenith = 90 - userdefSatPos[1]
         sunPositions = get_alt_az(observationTime, lon[ii], lat[jj])
         sunZenith = sunPositions[0] * 180/pi
         sunAzimuth = sunPositions[1] * 180/pi
-        satsunAngles = np.round([satZenith, satAzimuth, sunZenith, sunAzimuth], 2)
+        satsunAngles = np.round([satZenith[0], satAzimuth[0], sunZenith, sunAzimuth], 2)
         satsunAngles_2line = ' '.join(map(str, satsunAngles))
         file_append.write(satsunAngles_2line)
         subHead = [

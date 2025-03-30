@@ -1,7 +1,18 @@
 def main_dm():
+
+    import importlib
+    try:
+       importlib.import_module("cdsapi")
+    except:
+       print("Warning: The Python module cdsapi is not installed.")
+       print("Install it and run again.")
+       print("Before running again, don't forget to set the CDS API key")
+       print("Exiting ..")
+       exit()
+
     import cdsapi
     import yaml
-    with open('input.yaml', 'r') as yaml_file:
+    with open('namelist_era5.yaml', 'r') as yaml_file:
         input_data = yaml.safe_load(yaml_file)
     year = input_data["time_of_simulation"]["year"]
     month = input_data["time_of_simulation"]["month"]
@@ -41,7 +52,8 @@ def main_dm():
         }
     print("  Downloading ERA5 data on the atmospheric pressure levels ..")
     print("-------------------------------------------------------------")
-    c.retrieve('reanalysis-era5-pressure-levels', myData, filename_level)
+    #c.retrieve('reanalysis-era5-pressure-levels', myData, filename_level)
+    c.retrieve('reanalysis-era5-pressure-levels', myData).download(filename_level)
     myData =     {
         'product_type': 'reanalysis',
         'variable': [
@@ -57,7 +69,8 @@ def main_dm():
     }
     print("  Downloading ERA5 surface data ..")
     print("----------------------------------")
-    c.retrieve('reanalysis-era5-single-levels', myData, filename_surface)
+    #c.retrieve('reanalysis-era5-single-levels', myData, filename_surface)
+    c.retrieve('reanalysis-era5-single-levels', myData).download(filename_surface)
 
 def check_integer(string_as_integer):
     try:

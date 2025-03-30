@@ -10,7 +10,7 @@ then
 fi
 
 TEST_DIR=/home/myname/WRFDA/rttov12/rttov_test/test_example.1
-dom_name=`sed -n '/domain_name/ p' input.yaml | awk '{print $2}'`
+dom_name=`sed -n '/domain_name/ p' namelist_era5.yaml | awk '{print $2}'`
 profile_directory=$dom_name"_profiles"
 outputDir=$dom_name"_outputs"
 if [ -d "$outputDir" ]; then
