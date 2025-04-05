@@ -326,16 +326,15 @@ def make_dust_profile():
         exit()
 
     varShape = mineral_nuc.shape
-    # pressureLevels = p/100 #hpa
 
     profileCount = 1
     jjmax = varShape[1]
     iimax = varShape[2]
     fillerNull = "0.000"
-    # for jj in range(jjmax): #latitudesTemperature profile (K)
-    #     for ii in range(iimax): #longitude
-    for jj in range(3): #latitudesTemperature profile (K)
-        for ii in range(2): #longitude
+    for jj in range(jjmax): #latitudesTemperature profile (K)
+        for ii in range(iimax): #longitude
+    # for jj in range(3): #latitudesTemperature profile (K)
+    #     for ii in range(2): #longitude
             jjcount = jj+1
             iicount = ii+1
             print("Creating profile data for the grid point jj:", jjcount, "ii:", iicount)
