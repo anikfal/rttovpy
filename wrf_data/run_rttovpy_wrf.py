@@ -643,7 +643,6 @@ def plot_rgb():
     plt.axis("off")
     plt.savefig(postprocessingDir + "/" + "brightness_temperature_rgb.png")
 
-
 if __name__ == "__main__":
     if not postprocessingEnabled:
         make_inputdata()

@@ -8,16 +8,27 @@ time_of_simulation:
   hour: 12
 
 area_of_simulation:
-  domain_name: smalldomain
-  north_latitude: 55
+  domain_name: mydomain # Will be used as a suffix to name the directories of the RTTOV input and output data files
+  north_latitude: 50
   south_latitude: 45
   west_longitude: 0
-  east_longitude: 10
+  east_longitude: 7
 
 satellite_information:
   sat_name_index: 2
   sat_channel_list: [1, 2, 3]
+  sat_channel_names: [red, green, blue] # Default band name. No need to be changed
   user_defined_position:
-    enable: true
-    sat_latitude: 50
-    sat_longitude: 5
+    enabled: true
+    sat_latitude: 47.5
+    sat_longitude: 3.5
+
+postprocessing:  # Enable (=true) to make NetCDF and plots from the RTTOV outputs.
+  enabled: true
+  postprocessing_directory_suffix: rttov_outputs_postprocessing #Default directory suffix. No need to be changed.
+  image_plot_all_bands: false
+  RGB_plot_brightness_temperature:
+    enabled: true
+    Red: red + green
+    Green: green
+    Blue: blue

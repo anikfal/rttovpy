@@ -8,7 +8,6 @@ time_of_simulation:
   day: 16
   hour: 0
 
-
 rttov_inputdata_directory_suffix: rttov_inputs  #Directory suffix, appending to the WRF filename. No need to be changed.
 rttov_outputdata_directory_suffix: rttov_outputs #Default directory suffix. No need to be changed.
 
