@@ -3,6 +3,16 @@
 ## Author: Amirhossein Nikfal <https://github.com/anikfal>
 ###############################################################################
 
+required_modules = ["numpy", "yaml", "netCDF4", "pyorbital", "wrf"]
+for module in required_modules:
+    try:
+        importlib.import_module(module)
+    except:
+        print("Warning: The Python module", module, "is not installed.")
+        print("Install it and run again.")
+        print("Exiting ..")
+        exit()
+
 import yaml
 import os
 import netCDF4 as nc
@@ -88,7 +98,8 @@ def make_inputdata():
     try:
         pass
         os.makedirs(dirName)
-        print(f"Directory {dirName} has been created to store profile datafiles.")
+        print(f"  Directory {dirName} has been created to store profile datafiles.")
+        print("  Please wait for a moment ..")
     except Exception as error:
         print(f"An error occurred while creating {dirName}: {error}")
 
@@ -293,7 +304,7 @@ def make_inputdata():
         print("==================================================================")
         print("Making the shellscript application for the RTTOV forward model ...")
         application_shell.make_final_application_shell(rttovCoef, str(varShape[0]), satChannels, rttov_install_path)
-        print("The file run_wrf_example_fwd.sh has been made successfully.")
+        print("The file run_wrf_example_fwd.sh has been generated successfully.")
     else:
         aerosol_coefficient_file_path = namelist["wrfchem_dust_profiles"]['aerosol_coefficient_file_path']
         if not os.path.exists(aerosol_coefficient_file_path):
@@ -305,7 +316,7 @@ def make_inputdata():
         print("==================================================================")
         print("Making the shellscript application for the RTTOV forward model ...")
         application_shell.make_final_dust_application_shell(rttovCoef, str(varShape[0]), satChannels, rttov_install_path, aerosol_coefficient_file_path)
-        print("The file run_wrf_example_fwd.sh has been made successfully.")
+        print("The file run_wrfchem_dust_example_fwd.sh has been generated successfully.")
 
 def make_dust_profile():
     from modules import count_lines, application_shell
@@ -528,6 +539,15 @@ def make_netcdf():
             "and emissivities have been stored in NetCDF files")
 
 def plot_png():
+    required_modules = ["matplotlib", "cartopy"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            exit()
     import matplotlib.pyplot as plt
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -577,6 +597,15 @@ def plot_png():
             plt.savefig(postprocessingDir + "/" + ds.attrs["title"]+ "_" + band + ".png")
 
 def plot_rgb():
+    required_modules = ["matplotlib", "cartopy"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            exit()
     import matplotlib.pyplot as plt
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
