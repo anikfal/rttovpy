@@ -3,6 +3,7 @@
 ## Author: Amirhossein Nikfal <https://github.com/anikfal>
 ###############################################################################
 
+import importlib
 required_modules = ["numpy", "yaml", "netCDF4", "pyorbital", "wrf"]
 for module in required_modules:
     try:
@@ -98,8 +99,7 @@ def make_inputdata():
     try:
         pass
         os.makedirs(dirName)
-        print(f"  Directory {dirName} has been created to store profile datafiles.")
-        print("  Please wait for a moment ..")
+        print(f"Directory {dirName} has been created to store profile datafiles.")
     except Exception as error:
         print(f"An error occurred while creating {dirName}: {error}")
 
@@ -304,7 +304,7 @@ def make_inputdata():
         print("==================================================================")
         print("Making the shellscript application for the RTTOV forward model ...")
         application_shell.make_final_application_shell(rttovCoef, str(varShape[0]), satChannels, rttov_install_path)
-        print("The file run_wrf_example_fwd.sh has been generated successfully.")
+        print("The file run_wrf_example_fwd.sh has been made successfully.")
     else:
         aerosol_coefficient_file_path = namelist["wrfchem_dust_profiles"]['aerosol_coefficient_file_path']
         if not os.path.exists(aerosol_coefficient_file_path):
@@ -316,7 +316,7 @@ def make_inputdata():
         print("==================================================================")
         print("Making the shellscript application for the RTTOV forward model ...")
         application_shell.make_final_dust_application_shell(rttovCoef, str(varShape[0]), satChannels, rttov_install_path, aerosol_coefficient_file_path)
-        print("The file run_wrfchem_dust_example_fwd.sh has been generated successfully.")
+        print("The file run_wrf_example_fwd.sh has been made successfully.")
 
 def make_dust_profile():
     from modules import count_lines, application_shell
@@ -326,7 +326,7 @@ def make_dust_profile():
 
     try:
         mineral_nuc = getvar(wrffile, "DUST_1", timeidx=observationIndex) * 1e-9
-        mineral_acc = getvar(wrffile, "DUST_2", timeidx=observationIndex) + getvar(wrffile, "DUST_3", timeidx=observationIndex) + getvar(wrffile, "DUST_4", timeidx=observationIndex) * 1e-9
+        mineral_acc = (getvar(wrffile, "DUST_2", timeidx=observationIndex) + getvar(wrffile, "DUST_3", timeidx=observationIndex) + getvar(wrffile, "DUST_4", timeidx=observationIndex)) * 1e-9
         mineral_coa = getvar(wrffile, "DUST_5", timeidx=observationIndex) * 1e-9
         p = getvar(wrffile, "p", timeidx=observationIndex)
 
@@ -391,7 +391,7 @@ def make_dust_profile():
                 file_append.write("! Supply the number density profiles here" + "\n")
                 file_append.write("  0" + "\n")
                 file_append.write("!" + "\n")
-                file_append.write("! Number density profiles (cm-3) for each aerosol particle type (1-13) for each layer" + "\n")
+                file_append.write("! Dust concentration profiles (kg/kg) for each aerosol particle type (1-13) for each layer" + "\n")
                 file_append.write("!" + "\n")
                 file_append.write("!      INSO       WASO       SOOT       SSAM       SSCM       MINM       MIAM       MICM       MITR       SUSO       VOLA       VAPO       ASDU" + "\n")
                 file_append.write("!" + "\n")
@@ -416,12 +416,15 @@ def make_dust_profile():
 
 import xarray as xr
 from glob import glob
+outputDirnameSuffix = namelist["rttov_outputdata_directory_suffix"]
+basedir = os.path.basename(wrfFilePath)
+outputDirPath = basedir+"_"+outputDirnameSuffix
 def make_netcdf():
     import re
     wrffilexr = xr.open_dataset(wrfFilePath, engine='netcdf4', mode='r')
-    outputDirnameSuffix = namelist["rttov_outputdata_directory_suffix"]
-    basedir = os.path.basename(wrfFilePath)
-    outputDirPath = basedir+"_"+outputDirnameSuffix
+#    outputDirnameSuffix = namelist["rttov_outputdata_directory_suffix"]
+#    basedir = os.path.basename(wrfFilePath)
+#    outputDirPath = basedir+"_"+outputDirnameSuffix
     t2000 = wrffilexr.T2
     t2 = t2000.isel(Time=observationIndex).squeeze()
     xlat  = wrffilexr.XLAT.to_numpy()[0,:,:]
@@ -681,7 +684,8 @@ if __name__ == "__main__":
         image_plot_enabled = namelist["postprocessing"]['image_plot_all_bands']
         rgb_plot_enabled = namelist["postprocessing"]['RGB_plot_brightness_temperature']['enabled']
         print("Postprocessing ...")
-        if not os.path.isdir(postprocessingDir):
+        #if not os.path.isdir(postprocessingDir):
+        if not os.path.isdir(outputDirPath):
             print(f"Warning: The postprocessing directory ({postprocessingDir}) and RTTOV outputs are not availabe.")
             print("Disable postprocessing and run to make the profile files.")
             print("Exiting ..")

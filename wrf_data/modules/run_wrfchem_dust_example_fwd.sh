@@ -22,7 +22,7 @@ fi
 mkdir $outputDir
 
 for myprofile in $profile_directory/prof-*.dat; do
-  AER_PROF_FILENAME="aer_prof-"`echo $myprofile | cut -d "-" -f 2`
+  AER_PROF_FILENAME="aer_prof-"`basename $myprofile | cut -d "-" -f 2`
   ARG_ARCH=$(perl -e 'for(@ARGV){m/^ARCH=(\S+)$/o && print "$1";}' $*)
   if [ ! "x$ARG_ARCH" = "x" ]; then
     ARCH=$ARG_ARCH
@@ -39,6 +39,7 @@ for myprofile in $profile_directory/prof-*.dat; do
   profileName=`basename $myprofile`
   echo Simulating based on $filePath
   ln -sf $filePath $TEST_DIR
+  ln -sf $profile_directory/$AER_PROF_FILENAME $TEST_DIR
 
   # Test case input data
   COEF_FILENAME=/home/anikfal/WRFDA/rttov12/rtcoef_rttov12/rttov7pred54L/rtcoef_noaa_16_avhrr.dat
@@ -94,7 +95,7 @@ EOF
 
 if [ $? -eq 0 ]; then
   cd $CWD
-  mv $TEST_DIR/output_example_fwd.dat $outputDir/output_example_fwd.dat_$profileName
+  mv $TEST_DIR/output_example_aer_file_fwd.dat $outputDir/output_example_fwd.dat_$profileName
 else
   echo "Profile data " $profileName " has an issue (zenith angle > 75, etc)."
   echo "Skipping this profile, and filling with missing value."
