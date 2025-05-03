@@ -1,6 +1,6 @@
 rttov_installation_path: /home/anikfal/WRFDA/rttov12
-rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/rttov7pred54L/rtcoef_noaa_16_avhrr.dat
-wrf_file_path: /home/anikfal/postwrf/wrfout_d01_2022-05-15_00
+rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/rttov7pred54L/rtcoef_eos_2_modis.dat
+wrf_file_path: /home/anikfal/postwrf/zkuwaitoutputs/wrfout_d01_2022-05-15_00_kuwaitfirst
 
 time_of_simulation:
   year: 2022
@@ -13,10 +13,10 @@ rttov_outputdata_directory_suffix: rttov_outputs #Default directory suffix. No n
 
 wrfchem_dust_profiles:
   enabled: true
-  aerosol_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/cldaer_ir/scaercoef_eos_1_modis.dat
+  aerosol_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/cldaer_ir/scaercoef_eos_2_modis.dat
 
 satellite_information:
-  sat_name_index: 2
+  sat_name_index: 1
   sat_channel_list: [1, 2, 3]
   sat_channel_names: [red, green, blue] #Default band name. No need to be changed
   user_defined_position:
@@ -25,11 +25,16 @@ satellite_information:
     sat_longitude: 55
 
 postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs.
-  enabled: false
+  enabled: true
   postprocessing_directory_suffix: rttov_outputs_postprocessing #Default directory suffix. No need to be changed.
-  image_plot_all_bands: false
+  image_plot_all_bands: true
   RGB_plot_brightness_temperature:
     enabled: false
     Red: red + green
     Green: green
     Blue: blue
+
+verifiation:
+  enabled: true
+  satellite_file_path: /home/anikfal/extra_codes/msgseviri/msg/zdata/MSG1-SEVI-MSG15-0100-NA-20220516122742.057000000Z-NA.nat
+  satellite_sensor_id: 53

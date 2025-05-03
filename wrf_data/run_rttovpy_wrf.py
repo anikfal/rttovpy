@@ -3,7 +3,7 @@
 ## Author: Amirhossein Nikfal <https://github.com/anikfal>
 ###############################################################################
 
-import importlib
+import importlib, sys
 required_modules = ["numpy", "yaml", "netCDF4", "pyorbital", "wrf"]
 for module in required_modules:
     try:
@@ -12,7 +12,7 @@ for module in required_modules:
         print("Warning: The Python module", module, "is not installed.")
         print("Install it and run again.")
         print("Exiting ..")
-        exit()
+        sys.exit()
 
 import yaml
 import os
@@ -23,6 +23,7 @@ with open('namelist_wrf.yaml', 'r') as yaml_file:
     namelist = yaml.safe_load(yaml_file)
 postprocessingEnabled = namelist["postprocessing"]['enabled']
 dust = namelist["wrfchem_dust_profiles"]['enabled']
+satelliteVerifiationEnabled = namelist["verifiation"]['enabled']
 wrfFilePath = namelist["wrf_file_path"]
 wrfFileName = os.path.basename(wrfFilePath)
 wrffile = nc.Dataset(wrfFilePath)
@@ -46,7 +47,7 @@ if not startDate <= observationTime <= endDate:
     print("!!!!!!!!!!!!!!!!!!!")
     print(f"Warning: {observationTime} is not among the time-slots of {wrfFileName} (must be between {startDate} and {endDate}).")
     print("Exiting ..")
-    exit()
+    sys.exit()
 observationIndex000 = (observationTime - startDate)/ (60*int(minuteArr[1]))
 observationIndex = int(observationIndex000.total_seconds()) - 1
 satChannels000 = namelist["satellite_information"]["sat_channel_list"]
@@ -55,7 +56,7 @@ bandNames = namelist["satellite_information"]["sat_channel_names"]
 if len(satChannels000) != len(bandNames):
     print("Warning: lengths of sat_channel_list and sat_channel_names are not equal.")
     print("Exiting ..")
-    exit()
+    sys.exit()
 
 def make_inputdata():
     from modules import count_lines, application_shell
@@ -422,9 +423,6 @@ outputDirPath = basedir+"_"+outputDirnameSuffix
 def make_netcdf():
     import re
     wrffilexr = xr.open_dataset(wrfFilePath, engine='netcdf4', mode='r')
-#    outputDirnameSuffix = namelist["rttov_outputdata_directory_suffix"]
-#    basedir = os.path.basename(wrfFilePath)
-#    outputDirPath = basedir+"_"+outputDirnameSuffix
     t2000 = wrffilexr.T2
     t2 = t2000.isel(Time=observationIndex).squeeze()
     xlat  = wrffilexr.XLAT.to_numpy()[0,:,:]
@@ -675,28 +673,60 @@ def plot_rgb():
     plt.axis("off")
     plt.savefig(postprocessingDir + "/" + "brightness_temperature_rgb.png")
 
-if __name__ == "__main__":
-    if not postprocessingEnabled:
-        make_inputdata()
-    else:
-        postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
-        postprocessingDir = wrfFileName+"_"+postprocessing_directory_suffix
-        image_plot_enabled = namelist["postprocessing"]['image_plot_all_bands']
-        rgb_plot_enabled = namelist["postprocessing"]['RGB_plot_brightness_temperature']['enabled']
-        print("Postprocessing ...")
-        #if not os.path.isdir(postprocessingDir):
-        if not os.path.isdir(outputDirPath):
-            print(f"Warning: The postprocessing directory ({postprocessingDir}) and RTTOV outputs are not availabe.")
-            print("Disable postprocessing and run to make the profile files.")
+def run_postprocessing():
+    postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
+    postprocessingDir = wrfFileName+"_"+postprocessing_directory_suffix
+    image_plot_enabled = namelist["postprocessing"]['image_plot_all_bands']
+    rgb_plot_enabled = namelist["postprocessing"]['RGB_plot_brightness_temperature']['enabled']
+    print("Postprocessing ...")
+    #if not os.path.isdir(postprocessingDir):
+    if not os.path.isdir(outputDirPath):
+        print(f"Warning: The postprocessing directory ({postprocessingDir}) and RTTOV outputs are not availabe.")
+        print("Disable postprocessing and run to make the profile files.")
+        print("Exiting ..")
+        exit()
+    print(f"Converting the RTTOV output within the ({postprocessingDir}) directory to NetCDF files ..")
+    make_netcdf()
+    if image_plot_enabled:
+        if os.path.isdir(postprocessingDir):
+            print(f"Looking for the RTTOV NetCDF outputs in {postprocessingDir} ..")
+            plot_png()
+    if rgb_plot_enabled:
+        if os.path.isdir(postprocessingDir):
+            print(f"Looking for the RTTOV NetCDF outputs for brightness temperature in {postprocessingDir} ..")
+            plot_rgb()
+
+def verification():
+    required_modules = ["satpy"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
             print("Exiting ..")
-            exit()
-        print(f"Converting the RTTOV output within the ({postprocessingDir}) directory to NetCDF files ..")
-        make_netcdf()
-        if image_plot_enabled:
-            if os.path.isdir(postprocessingDir):
-                print(f"Looking for the RTTOV NetCDF outputs in {postprocessingDir} ..")
-                plot_png()
-        if rgb_plot_enabled:
-            if os.path.isdir(postprocessingDir):
-                print(f"Looking for the RTTOV NetCDF outputs for brightness temperature in {postprocessingDir} ..")
-                plot_rgb()
+            sys.exit()
+    from satpy import Scene
+    from modules.satpy_readers import satpy_readers
+    sensor_id = namelist["verifiation"]['satellite_sensor_id']
+    satelliteDataPath = namelist["verifiation"]['satellite_file_path']
+    all_scenes = Scene(reader=satpy_readers.get(sensor_id), filenames=[satelliteDataPath])
+    all_scenes.load([all_scenes.all_dataset_names()[ii] for ii in satChannels000], calibration='radiance')
+    for scn in all_scenes:
+        print(scn)
+        print("------------------------------------------------")
+
+    # for chan_id, channel in enumerate(all_scenes.all_dataset_names()):
+    # all_scenes.load(['IR_087', 'IR_108', 'IR_120'])
+    # ch8 = all_scenes['IR_087']
+    # print(ch8)
+
+
+if __name__ == "__main__":
+    if satelliteVerifiationEnabled:
+        verification()
+        sys.exit()
+    if postprocessingEnabled:
+        run_postprocessing()
+    else:
+        make_inputdata()

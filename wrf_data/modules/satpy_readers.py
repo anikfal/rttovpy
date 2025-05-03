@@ -1,0 +1,11 @@
+satpy_readers = { 1:"abi_l1b", 2:"abi_l1b_scmi", 3:"abi_l2_nc", 4:"acspo", 5:"ahi_hrit", 6:"ahi_hsd", 7:"ahi_l1b_gridded_bin",
+                     8:"ahi_l2_nc", 9:"amsr2_l2_gaasp", 10:"amsub_l1c_aapp", 11:"atms_l1b_nc", 12:"avhrr_l1b_aapp",
+                     13:"avhrr_l1b_eps", 14:"avhrr_l1c_eum_gac_fdr_nc", 15:"aws1_mwr_l1b_nc", 16:"aws1_mwr_l1c_nc",
+                     17:"camel_l3_nc", 18:"cmsaf-claas2_l2_nc", 19:"electrol_hrit", 20:"eps_sterna_mwr_l1b_nc", 21:"fci_l1c_nc",
+                     22:"fci_l2_nc", 23:"geocat", 24:"ghrsst_l2", 25:"glm_l2", 26:"goci2_l2_nc", 27:"goes-imager_hrit",
+                     28:"goes-imager_nc", 29:"insat3d_img_l1b_h5", 30:"jami_hrit", 31:"li_l2_nc", 32:"meris_nc_sen3",
+                     33:"mhs_l1c_aapp", 34:"mimicTPW2_comp", 35:"mirs", 36:"msi_safe", 37:"msi_safe_l2a", 38:"mtsat2-imager_hrit",
+                     39:"multiple_sensors_isccpng_l1g_nc", 40:"mviri_l1b_fiduceo_nc", 41:"mws_l1b_nc", 42:"nucaps", 43:"nwcsaf-pps_nc",
+                     44:"oceancolorcci_l3_nc", 45:"olci_l1b", 46:"olci_l2", 47:"oli_tirs_l1_tif", 48:"osisaf_nc", 49:"pace_oci_l1b_nc",
+                     50:"safe_sar_l2_ocn", 51:"satpy_cf_nc", 52:"seviri_l1b_hrit", 53:"seviri_l1b_native", 54:"seviri_l1b_nc",
+                     55:"slstr_l1b", 56:"smos_l2_wind", 57:"tropomi_l2", 58:"viirs_edr", 59:"viirs_l1b", 60:"viirs_l2", 61:"viirs_vgac_l1c_nc"}
