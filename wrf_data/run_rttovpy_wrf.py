@@ -4,7 +4,7 @@
 ###############################################################################
 
 import importlib, sys
-required_modules = ["numpy", "yaml", "netCDF4", "pyorbital", "wrf"]
+required_modules = ["numpy", "yaml", "netCDF4", "pyorbital"]
 for module in required_modules:
     try:
         importlib.import_module(module)
@@ -23,7 +23,7 @@ with open('namelist_wrf.yaml', 'r') as yaml_file:
     namelist = yaml.safe_load(yaml_file)
 postprocessingEnabled = namelist["postprocessing"]['enabled']
 dust = namelist["wrfchem_dust_profiles"]['enabled']
-satelliteVerifiationEnabled = namelist["verifiation"]['enabled']
+satelliteVerificationEnabled = namelist["verification"]['enabled']
 wrfFilePath = namelist["wrf_file_path"]
 wrfFileName = os.path.basename(wrfFilePath)
 wrffile = nc.Dataset(wrfFilePath)
@@ -59,6 +59,15 @@ if len(satChannels000) != len(bandNames):
     sys.exit()
 
 def make_inputdata():
+    required_modules = ["wrf"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            sys.exit()
     from modules import count_lines, application_shell
     from pyorbital.orbital import get_observer_look
     from pyorbital.orbital import Orbital
@@ -420,6 +429,8 @@ from glob import glob
 outputDirnameSuffix = namelist["rttov_outputdata_directory_suffix"]
 basedir = os.path.basename(wrfFilePath)
 outputDirPath = basedir+"_"+outputDirnameSuffix
+postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
+postprocessingDir = wrfFileName+"_"+postprocessing_directory_suffix
 def make_netcdf():
     import re
     wrffilexr = xr.open_dataset(wrfFilePath, engine='netcdf4', mode='r')
@@ -674,8 +685,8 @@ def plot_rgb():
     plt.savefig(postprocessingDir + "/" + "brightness_temperature_rgb.png")
 
 def run_postprocessing():
-    postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
-    postprocessingDir = wrfFileName+"_"+postprocessing_directory_suffix
+    # postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
+    # postprocessingDir = wrfFileName+"_"+postprocessing_directory_suffix
     image_plot_enabled = namelist["postprocessing"]['image_plot_all_bands']
     rgb_plot_enabled = namelist["postprocessing"]['RGB_plot_brightness_temperature']['enabled']
     print("Postprocessing ...")
@@ -697,7 +708,7 @@ def run_postprocessing():
             plot_rgb()
 
 def verification():
-    required_modules = ["satpy"]
+    required_modules = ["satpy", "xesmf"]
     for module in required_modules:
         try:
             importlib.import_module(module)
@@ -707,23 +718,41 @@ def verification():
             print("Exiting ..")
             sys.exit()
     from satpy import Scene
+    import xesmf as xe
     from modules.satpy_readers import satpy_readers
-    sensor_id = namelist["verifiation"]['satellite_sensor_id']
-    satelliteDataPath = namelist["verifiation"]['satellite_file_path']
+    sensor_id = namelist["verification"]['satellite_sensor_id']
+    satelliteDataPath = namelist["verification"]['satellite_file_path']
+    keepRemappedEnabled = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['enabled']
+    wrf = xr.open_dataset(wrfFilePath)
     all_scenes = Scene(reader=satpy_readers.get(sensor_id), filenames=[satelliteDataPath])
-    all_scenes.load([all_scenes.all_dataset_names()[ii] for ii in satChannels000], calibration='radiance')
+    all_scenes.load([all_scenes.all_dataset_names()[ii-1] for ii in satChannels000], calibration='radiance')
+    # scnArea = all_scenes.attrs["area"]
+    scnArea = all_scenes[all_scenes._datasets.keys()[0].get("name")].attrs["area"]
+    lons, lats = scnArea.get_lonlats()
+    lons = np.where(np.isinf(lons), np.nan, lons)
+    lats = np.where(np.isinf(lats), np.nan, lats)
+    lat_wrf = wrf['XLAT'].isel(Time=0)
+    lon_wrf = wrf['XLONG'].isel(Time=0)
+    source_grid = xr.Dataset({'lat': (['y', 'x'], lats), 'lon': (['y', 'x'], lons)})
+    target_grid = xr.Dataset({'lat': lat_wrf, 'lon': lon_wrf})
+    print("Please wait. Regridding between the satellite and the WRF data ..")
+    regridder = xe.Regridder(source_grid, target_grid, method='bilinear')
     for scn in all_scenes:
-        print(scn)
-        print("------------------------------------------------")
+        print("Verification processing on the satellite", scn.attrs["platform_name"], "- band", scn.attrs["name"])
+        scn_regridded = regridder(scn)
+        for key in ["units", "sensor", "name", "standard_name", "platform_name"]:
+            value = scn.attrs.get(key)
+            scn_regridded.attrs[key] = str(value) if key == "wavelength" else value
+        if keepRemappedEnabled:
+            remappedFileName = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['remapped_file_name']
+            band_name = scn.attrs["name"]
+            print("Remapping satellite data on the WRF grid structure ..")
+            scn_regridded.to_dataset(name=band_name).drop_vars("crs").to_netcdf(remappedFileName + "_" + band_name + ".nc")
 
-    # for chan_id, channel in enumerate(all_scenes.all_dataset_names()):
-    # all_scenes.load(['IR_087', 'IR_108', 'IR_120'])
-    # ch8 = all_scenes['IR_087']
-    # print(ch8)
 
 
 if __name__ == "__main__":
-    if satelliteVerifiationEnabled:
+    if satelliteVerificationEnabled:
         verification()
         sys.exit()
     if postprocessingEnabled:
