@@ -708,6 +708,11 @@ def run_postprocessing():
             plot_rgb()
 
 def verification():
+    print("--- Verification ---")
+    print("--------------------")
+    print(satChannels000)
+    print(bandNames)
+    exit()
     required_modules = ["satpy", "xesmf"]
     for module in required_modules:
         try:
@@ -719,6 +724,7 @@ def verification():
             sys.exit()
     from satpy import Scene
     import xesmf as xe
+    # from xesmf.util import add_corners
     from modules.satpy_readers import satpy_readers
     sensor_id = namelist["verification"]['satellite_sensor_id']
     satelliteDataPath = namelist["verification"]['satellite_file_path']
@@ -734,21 +740,45 @@ def verification():
     lat_wrf = wrf['XLAT'].isel(Time=0)
     lon_wrf = wrf['XLONG'].isel(Time=0)
     source_grid = xr.Dataset({'lat': (['y', 'x'], lats), 'lon': (['y', 'x'], lons)})
+    # source_grid = add_corners(source_grid)
     target_grid = xr.Dataset({'lat': lat_wrf, 'lon': lon_wrf})
     print("Please wait. Regridding between the satellite and the WRF data ..")
-    regridder = xe.Regridder(source_grid, target_grid, method='bilinear')
+    # regridder = xe.Regridder(source_grid, target_grid, method='conservative') # mass conservative method for radiance as a flux
+    # regridder = xe.Regridder(source_grid, target_grid, method='conservative_normed') # mass conservative method for radiance as a flux
+    regridder = xe.Regridder(source_grid, target_grid, method='bilinear') # mass conservative method for radiance as a flux
+    bandName_iter = iter(bandNames)
+    radiance_file = glob(os.path.join(postprocessingDir, "radiance*.nc"))
+    if radiance_file:
+        radiance_netcdf = xr.open_dataset(radiance_file[0])
+    else:
+        print("No radiance NetCDF file found in", postprocessingDir)
+        pirnt("Exiting ..")
+        exit()
+
     for scn in all_scenes:
         print("Verification processing on the satellite", scn.attrs["platform_name"], "- band", scn.attrs["name"])
-        scn_regridded = regridder(scn)
+        scn_regridded_to_wrf = regridder(scn)
+        bandFromRadiation_xarray = radiance_netcdf[next(bandName_iter)]
         for key in ["units", "sensor", "name", "standard_name", "platform_name"]:
             value = scn.attrs.get(key)
-            scn_regridded.attrs[key] = str(value) if key == "wavelength" else value
+            scn_regridded_to_wrf.attrs[key] = str(value) if key == "wavelength" else value
+
+        # scn_regridded_to_wrf_valid = scn_regridded_to_wrf.values[np.isfinite(scn_regridded_to_wrf.values)]
+        # bandFromRadiation_xarray_valid = bandFromRadiation_xarray.values[np.isfinite(bandFromRadiation_xarray.values)]
+        scn_regridded_to_wrf_ref = scn_regridded_to_wrf.values.flatten()
+        bandFromRadiation_xarray_ref = bandFromRadiation_xarray.values.flatten()
+        mask = ~np.isnan(scn_regridded_to_wrf_ref) & ~np.isnan(bandFromRadiation_xarray_ref)
+        scn_regridded_to_wrf_ref = scn_regridded_to_wrf_ref[mask]
+        bandFromRadiation_xarray_ref = bandFromRadiation_xarray_ref[mask]
+        # should be appended to list for red, green, blue, ...
+        # std_ref = np.std(ref)
+        # std_test = np.std(test)
+        # corr = np.corrcoef(ref, test)[0, 1]
         if keepRemappedEnabled:
             remappedFileName = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['remapped_file_name']
             band_name = scn.attrs["name"]
             print("Remapping satellite data on the WRF grid structure ..")
-            scn_regridded.to_dataset(name=band_name).drop_vars("crs").to_netcdf(remappedFileName + "_" + band_name + ".nc")
-
+            scn_regridded_to_wrf.to_dataset(name=band_name).drop_vars("crs").to_netcdf(remappedFileName + "_" + band_name + ".nc")
 
 
 if __name__ == "__main__":

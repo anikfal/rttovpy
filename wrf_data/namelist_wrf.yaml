@@ -18,14 +18,14 @@ wrfchem_dust_profiles:
 satellite_information:
   sat_name_index: 1
   sat_channel_list: [4, 6, 7]
-  sat_channel_names: [red, green, blue] #Default band name. No need to be changed
+  sat_channel_names: [red, green, blue]  # any arbitrary names corresponding to the values of sat_channel_list
   user_defined_position:
     enabled: true
     sat_latitude: 33
     sat_longitude: 51
 
 postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs.
-  enabled: true
+  enabled: false
   postprocessing_directory_suffix: rttov_outputs_postprocessing #Default directory suffix. No need to be changed.
   image_plot_all_bands: true
   RGB_plot_brightness_temperature:
