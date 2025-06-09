@@ -742,7 +742,8 @@ def verification():
     source_grid = xr.Dataset({'lat': (['y', 'x'], lats), 'lon': (['y', 'x'], lons)})
     # source_grid = add_corners(source_grid)
     target_grid = xr.Dataset({'lat': lat_wrf, 'lon': lon_wrf})
-    print("Please wait. Regridding between the satellite and the WRF data ..")
+    print("Regridding between the satellite and the WRF data.")
+    print("Can take a few minutes. Please wait ..")
     # regridder = xe.Regridder(source_grid, target_grid, method='conservative') # mass conservative method for radiance as a flux
     # regridder = xe.Regridder(source_grid, target_grid, method='conservative_normed') # mass conservative method for radiance as a flux
     regridder = xe.Regridder(source_grid, target_grid, method='bilinear') # mass conservative method for radiance as a flux
@@ -754,32 +755,48 @@ def verification():
         print("No radiance NetCDF file found in", postprocessingDir)
         pirnt("Exiting ..")
         exit()
-
+    std_list = []
+    cor_list = []
     for scn in all_scenes:
         print("Verification processing on the satellite", scn.attrs["platform_name"], "- band", scn.attrs["name"])
         scn_regridded_to_wrf = regridder(scn)
-        bandFromRadiation_xarray = radiance_netcdf[next(bandName_iter)]
-        for key in ["units", "sensor", "name", "standard_name", "platform_name"]:
-            value = scn.attrs.get(key)
-            scn_regridded_to_wrf.attrs[key] = str(value) if key == "wavelength" else value
-
-        # scn_regridded_to_wrf_valid = scn_regridded_to_wrf.values[np.isfinite(scn_regridded_to_wrf.values)]
-        # bandFromRadiation_xarray_valid = bandFromRadiation_xarray.values[np.isfinite(bandFromRadiation_xarray.values)]
-        scn_regridded_to_wrf_ref = scn_regridded_to_wrf.values.flatten()
-        bandFromRadiation_xarray_ref = bandFromRadiation_xarray.values.flatten()
-        mask = ~np.isnan(scn_regridded_to_wrf_ref) & ~np.isnan(bandFromRadiation_xarray_ref)
-        scn_regridded_to_wrf_ref = scn_regridded_to_wrf_ref[mask]
-        bandFromRadiation_xarray_ref = bandFromRadiation_xarray_ref[mask]
-        # should be appended to list for red, green, blue, ...
-        # std_ref = np.std(ref)
-        # std_test = np.std(test)
-        # corr = np.corrcoef(ref, test)[0, 1]
         if keepRemappedEnabled:
             remappedFileName = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['remapped_file_name']
             band_name = scn.attrs["name"]
             print("Remapping satellite data on the WRF grid structure ..")
             scn_regridded_to_wrf.to_dataset(name=band_name).drop_vars("crs").to_netcdf(remappedFileName + "_" + band_name + ".nc")
-
+        bandFromRadiation_xarray = radiance_netcdf[next(bandName_iter)]
+        for key in ["units", "sensor", "name", "standard_name", "platform_name"]:
+            value = scn.attrs.get(key)
+            scn_regridded_to_wrf.attrs[key] = str(value) if key == "wavelength" else value
+        scn_regridded_to_wrf_ref = scn_regridded_to_wrf.values.flatten()
+        bandFromWRFRadiation_xarray_ref = bandFromRadiation_xarray.values.flatten()
+        mask = ~np.isnan(scn_regridded_to_wrf_ref) & ~np.isnan(bandFromWRFRadiation_xarray_ref)
+        scn_regridded_to_wrf_ref = scn_regridded_to_wrf_ref[mask]
+        bandFromWRFRadiation_xarray_ref = bandFromWRFRadiation_xarray_ref[mask]
+        # should be appended to list for red, green, blue, ... a list must be created beforehand the loop
+        # std_ref = np.std(ref)
+        # std_test = np.std(test)
+        # corr = np.corrcoef(ref, test)[0, 1]
+        std_list.append(np.std(bandFromWRFRadiation_xarray_ref)/np.std(scn_regridded_to_wrf_ref))
+        cor_list.append(np.corrcoef(scn_regridded_to_wrf_ref, bandFromWRFRadiation_xarray_ref)[0, 1])
+    required_modules = ["matplotlib", "geocat.viz"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            sys.exit()
+    # Create figure and TaylorDiagram instance
+    fig = plt.figure(figsize=(10, 10))
+    dia = gv.TaylorDiagram(fig=fig, label='REF')
+    # Add models to Taylor diagram
+    dia.add_model_set(std_list, cor_list, color='red', marker='o', label='Radiation', fontsize=16)
+    dia.add_model_name(bandNames, fontsize=16)
+    dia.add_legend(fontsize=16)
+    plt.show()
 
 if __name__ == "__main__":
     if satelliteVerificationEnabled:
