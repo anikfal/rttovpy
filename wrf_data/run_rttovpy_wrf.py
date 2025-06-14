@@ -729,6 +729,8 @@ def verification():
     sensor_id = namelist["verification"]['satellite_sensor_id']
     satelliteDataPath = namelist["verification"]['satellite_file_path']
     keepRemappedEnabled = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['enabled']
+    verification_directory_suffix = namelist["verification"]['verification_directory_suffix']
+    verificationDir = wrfFileName+"_"+verification_directory_suffix
     wrf = xr.open_dataset(wrfFilePath)
     all_scenes = Scene(reader=satpy_readers.get(sensor_id), filenames=[satelliteDataPath])
     all_scenes.load([all_scenes.all_dataset_names()[ii-1] for ii in satChannels000], calibration='radiance')

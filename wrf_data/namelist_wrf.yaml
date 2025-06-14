@@ -36,8 +36,10 @@ postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs
 
 verification:
   enabled: true
+  verification_directory_suffix: rttov_outputs_verification
   satellite_file_path: /home/anikfal/extra_codes/msgseviri/msg/zdata/MSG1-SEVI-MSG15-0100-NA-20220516122742.057000000Z-NA.nat
   satellite_sensor_id: 53
+  taylor_diagram_name: radiation_taylor_diagram
   keep_remapped_satellite_to_wrf_data:  # Keep the NetCDF data of the remapped satellite data to the WRF grid structure
     enabled: true
     remapped_file_name: msg_to_wrf
