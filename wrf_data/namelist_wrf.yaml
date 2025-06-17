@@ -24,6 +24,7 @@ satellite_information:
     sat_latitude: 33
     sat_longitude: 51
 
+#================================================================================================================
 postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs.
   enabled: false
   postprocessing_directory_suffix: rttov_outputs_postprocessing #Default directory suffix. No need to be changed.
@@ -35,7 +36,7 @@ postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs
     Blue: blue
 
 verification:
-  enabled: true
+  enabled: false
   verification_directory_suffix: rttov_outputs_verification
   satellite_file_path: /home/anikfal/extra_codes/msgseviri/msg/zdata/MSG1-SEVI-MSG15-0100-NA-20220516122742.057000000Z-NA.nat
   satellite_sensor_id: 53

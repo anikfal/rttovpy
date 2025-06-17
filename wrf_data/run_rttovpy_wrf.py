@@ -708,11 +708,6 @@ def run_postprocessing():
             plot_rgb()
 
 def verification():
-    print("--- Verification ---")
-    print("--------------------")
-    print(satChannels000)
-    print(bandNames)
-    exit()
     required_modules = ["satpy", "xesmf"]
     for module in required_modules:
         try:
@@ -734,7 +729,6 @@ def verification():
     wrf = xr.open_dataset(wrfFilePath)
     all_scenes = Scene(reader=satpy_readers.get(sensor_id), filenames=[satelliteDataPath])
     all_scenes.load([all_scenes.all_dataset_names()[ii-1] for ii in satChannels000], calibration='radiance')
-    # scnArea = all_scenes.attrs["area"]
     scnArea = all_scenes[all_scenes._datasets.keys()[0].get("name")].attrs["area"]
     lons, lats = scnArea.get_lonlats()
     lons = np.where(np.isinf(lons), np.nan, lons)
@@ -746,10 +740,7 @@ def verification():
     target_grid = xr.Dataset({'lat': lat_wrf, 'lon': lon_wrf})
     print("Regridding between the satellite and the WRF data.")
     print("Can take a few minutes. Please wait ..")
-    # regridder = xe.Regridder(source_grid, target_grid, method='conservative') # mass conservative method for radiance as a flux
-    # regridder = xe.Regridder(source_grid, target_grid, method='conservative_normed') # mass conservative method for radiance as a flux
     regridder = xe.Regridder(source_grid, target_grid, method='bilinear') # mass conservative method for radiance as a flux
-    bandName_iter = iter(bandNames)
     radiance_file = glob(os.path.join(postprocessingDir, "radiance*.nc"))
     if radiance_file:
         radiance_netcdf = xr.open_dataset(radiance_file[0])
@@ -757,8 +748,12 @@ def verification():
         print("No radiance NetCDF file found in", postprocessingDir)
         pirnt("Exiting ..")
         exit()
+    bandName_iter = iter(bandNames)
     std_list = []
+    rmse_list = []
     cor_list = []
+    if not os.path.exists(verificationDir):
+        os.makedirs(verificationDir, exist_ok=True)
     for scn in all_scenes:
         print("Verification processing on the satellite", scn.attrs["platform_name"], "- band", scn.attrs["name"])
         scn_regridded_to_wrf = regridder(scn)
@@ -766,7 +761,7 @@ def verification():
             remappedFileName = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['remapped_file_name']
             band_name = scn.attrs["name"]
             print("Remapping satellite data on the WRF grid structure ..")
-            scn_regridded_to_wrf.to_dataset(name=band_name).drop_vars("crs").to_netcdf(remappedFileName + "_" + band_name + ".nc")
+            scn_regridded_to_wrf.to_dataset(name=band_name).drop_vars("crs").to_netcdf(os.path.join(verificationDir, remappedFileName + "_" + band_name + ".nc"))
         bandFromRadiation_xarray = radiance_netcdf[next(bandName_iter)]
         for key in ["units", "sensor", "name", "standard_name", "platform_name"]:
             value = scn.attrs.get(key)
@@ -776,13 +771,11 @@ def verification():
         mask = ~np.isnan(scn_regridded_to_wrf_ref) & ~np.isnan(bandFromWRFRadiation_xarray_ref)
         scn_regridded_to_wrf_ref = scn_regridded_to_wrf_ref[mask]
         bandFromWRFRadiation_xarray_ref = bandFromWRFRadiation_xarray_ref[mask]
-        # should be appended to list for red, green, blue, ... a list must be created beforehand the loop
-        # std_ref = np.std(ref)
-        # std_test = np.std(test)
-        # corr = np.corrcoef(ref, test)[0, 1]
         std_list.append(np.std(bandFromWRFRadiation_xarray_ref)/np.std(scn_regridded_to_wrf_ref))
+        rmse_list.append( (np.sqrt(np.mean((bandFromWRFRadiation_xarray_ref - scn_regridded_to_wrf_ref) ** 2))) / np.mean(bandFromWRFRadiation_xarray_ref) )
         cor_list.append(np.corrcoef(scn_regridded_to_wrf_ref, bandFromWRFRadiation_xarray_ref)[0, 1])
-    required_modules = ["matplotlib", "geocat.viz"]
+
+    required_modules = ["matplotlib.pyplot", "geocat.viz"]
     for module in required_modules:
         try:
             importlib.import_module(module)
@@ -791,14 +784,32 @@ def verification():
             print("Install it and run again.")
             print("Exiting ..")
             sys.exit()
+    import matplotlib.pyplot as plt
+    import geocat.viz as gv
+    taylor_filename = namelist["verification"]['taylor_diagram_name']
     # Create figure and TaylorDiagram instance
     fig = plt.figure(figsize=(10, 10))
     dia = gv.TaylorDiagram(fig=fig, label='REF')
     # Add models to Taylor diagram
     dia.add_model_set(std_list, cor_list, color='red', marker='o', label='Radiation', fontsize=16)
     dia.add_model_name(bandNames, fontsize=16)
+    dia.add_contours(levels=np.arange(0, 1.1, 0.25), colors='lightgrey', linewidths=0.5)
     dia.add_legend(fontsize=16)
-    plt.show()
+    print("Storing extracted values in NetCDF files ..")
+    plt.savefig( os.path.join(verificationDir, taylor_filename+".png"))
+
+    wholeStatistics = [std_list, rmse_list, cor_list]
+    rownames = ["CV", "RMSE", "Correlation"]
+    col_width = max(len(h) for h in bandNames) + 2
+    rowname_width = max(len(r) for r in rownames) + 2
+    header = f"{'':<{rowname_width}}" + " ".join(f"{h:<{col_width}}" for h in bandNames)
+    rows = [
+        f"{rowname:<{rowname_width}}" + " ".join(f"{val:.3f}".ljust(col_width) for val in row)
+        for rowname, row in zip(rownames, wholeStatistics)
+    ]
+    table_str = "\n".join([header] + rows)
+    with open(os.path.join(verificationDir, taylor_filename+"_table.txt"), "w") as f:
+        f.write(table_str)
 
 if __name__ == "__main__":
     if satelliteVerificationEnabled:
