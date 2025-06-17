@@ -1,0 +1,63 @@
+# List of available satellite sensor readers for the satpy python module
+# ------------------------------------------------------------------
+1: GOES-R ABI imager Level 1b data in netcdf format
+2: SCMI ABI L1B in netCDF4 format
+3: GOES-R ABI Level 2 products in netCDF4 format
+4: NOAA Level 2 ACSPO SST data in netCDF4 format
+5: Himawari (8 + 9) AHI Level 1 (HRIT)
+6: Himawari (8 + 9) AHI Level 1b (HSD)
+7: Himawari (8 + 9) AHI Level 1b (gridded)
+8: Himawari-8/9 AHI Level 2 products in netCDF4 format from NOAA enterprise
+9: GCOM-W1 AMSR2 Level 2 GAASP (NetCDF4)
+10: AAPP L1C AMSU-B format
+11: S-NPP and JPSS-1 ATMS L1B (NetCDF4)
+12: NOAA 15 to 19, Metop A to C AVHRR data in AAPP format
+13: Metop A to C AVHRR in native level 1 format
+14: EUMETCSAT GAC FDR NetCDF4
+15: AWS1 MWR L1B Radiance (NetCDF4)
+16: AWS1 MWR L1C Radiance (NetCDF4)
+17: CAMEL emissivity level 3 data in netCDF4 format.
+18: CMSAF CLAAS-2 data for SEVIRI-derived cloud products
+19: Electro-L N2 MSU-GS data in HRIT format
+20: EPS-Sterna MWR L1B Radiance (NetCDF4)
+21: MTG FCI Level-1c NetCDF
+22: MTG FCI L2 data in netCDF4 format
+23: GEOstationary Cloud Algorithm Test-bed
+24: Sentinel-3 SLSTR SST data in netCDF4 format
+25: GOES-R GLM Level 2
+26: GK-2B GOCI-II Level 2 products in netCDF4 format from NOSC
+27: GOES Imager Level 1 (HRIT)
+28: GOES Imager Level 1 (netCDF)
+29: Insat 3d IMG L1B HDF5
+30: MTSAT-1R JAMI Level 1 data in JMA HRIT format
+31: LI Level-2 NetCDF Reader
+32: Sentinel 3 MERIS NetCDF format
+33: AAPP L1C in MHS format
+34: MIMIC Total Precipitable Water Product Reader in netCDF format
+35: MiRS Level 2 Precipitation and Surface Swath Product Reader in netCDF4 format
+36: Sentinel-2 A and B MSI L1C data in SAFE format
+37: Sentinel-2 A and B MSI L2A data in SAFE format
+38: MTSAT-2 Imager Level 1 data in JMA HRIT format
+39: ISCCP NG Level 1g NetCDF4
+40: MFG (Meteosat 2 to 7) MVIRI data in netCDF format (FIDUCEO FCDR)
+41: EPS-SG MWS L1B Radiance (NetCDF4)
+42: NUCAPS EDR Retrieval data in NetCDF4 format
+43: NWCSAF PPS 2014, 2018 products in netCDF4 format
+44: Ocean color CCI Level 3S data reader
+45: Sentinel-3 A and B OLCI Level 1B data in netCDF4 format
+46: Sentinel-3 A and B OLCI Level 2 data in netCDF4 format
+47: Landsat-8/9 OLI/TIRS L1 data in GeoTIFF format.
+48: OSI-SAF data in netCDF4 format
+49: PACE OCI Level 1B data in netCDF4 format
+50: SAR Level 2 OCN data in SAFE format
+51: Reader for CF conform netCDF files written with Satpy
+52: MSG SEVIRI Level 1b (HRIT)
+53: MSG (Meteosat 8 to 11) SEVIRI data in native format
+54: MSG SEVIRI Level 1b NetCDF4
+55: Sentinel-3 A and B SLSTR data in netCDF4 format
+56: SMOS level 2 wind data in NetCDF4 format
+57: TROPOMI Level 2 data in NetCDF4 format
+58: JPSS VIIRS EDR NetCDF format
+59: JPSS VIIRS Level 1b data in netCDF4 format
+60: SNPP VIIRS Level 2 data in netCDF4 format
+61: VIIRS Global Area Coverage from VIIRS Reflected Solar Band and Thermal Emission Band data for both Moserate resolution and Imager resolution channels.

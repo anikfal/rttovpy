@@ -3,8 +3,8 @@
 ## Author: Amirhossein Nikfal <https://github.com/anikfal>
 ###############################################################################
 
-import importlib
-required_modules = ["numpy", "yaml", "netCDF4", "pyorbital", "wrf"]
+import importlib, sys
+required_modules = ["numpy", "yaml", "netCDF4", "pyorbital"]
 for module in required_modules:
     try:
         importlib.import_module(module)
@@ -12,7 +12,7 @@ for module in required_modules:
         print("Warning: The Python module", module, "is not installed.")
         print("Install it and run again.")
         print("Exiting ..")
-        exit()
+        sys.exit()
 
 import yaml
 import os
@@ -23,6 +23,7 @@ with open('namelist_wrf.yaml', 'r') as yaml_file:
     namelist = yaml.safe_load(yaml_file)
 postprocessingEnabled = namelist["postprocessing"]['enabled']
 dust = namelist["wrfchem_dust_profiles"]['enabled']
+satelliteVerificationEnabled = namelist["verification"]['enabled']
 wrfFilePath = namelist["wrf_file_path"]
 wrfFileName = os.path.basename(wrfFilePath)
 wrffile = nc.Dataset(wrfFilePath)
@@ -46,7 +47,7 @@ if not startDate <= observationTime <= endDate:
     print("!!!!!!!!!!!!!!!!!!!")
     print(f"Warning: {observationTime} is not among the time-slots of {wrfFileName} (must be between {startDate} and {endDate}).")
     print("Exiting ..")
-    exit()
+    sys.exit()
 observationIndex000 = (observationTime - startDate)/ (60*int(minuteArr[1]))
 observationIndex = int(observationIndex000.total_seconds()) - 1
 satChannels000 = namelist["satellite_information"]["sat_channel_list"]
@@ -55,9 +56,18 @@ bandNames = namelist["satellite_information"]["sat_channel_names"]
 if len(satChannels000) != len(bandNames):
     print("Warning: lengths of sat_channel_list and sat_channel_names are not equal.")
     print("Exiting ..")
-    exit()
+    sys.exit()
 
 def make_inputdata():
+    required_modules = ["wrf"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            sys.exit()
     from modules import count_lines, application_shell
     from pyorbital.orbital import get_observer_look
     from pyorbital.orbital import Orbital
@@ -419,12 +429,11 @@ from glob import glob
 outputDirnameSuffix = namelist["rttov_outputdata_directory_suffix"]
 basedir = os.path.basename(wrfFilePath)
 outputDirPath = basedir+"_"+outputDirnameSuffix
+postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
+postprocessingDir = wrfFileName+"_"+postprocessing_directory_suffix
 def make_netcdf():
     import re
     wrffilexr = xr.open_dataset(wrfFilePath, engine='netcdf4', mode='r')
-#    outputDirnameSuffix = namelist["rttov_outputdata_directory_suffix"]
-#    basedir = os.path.basename(wrfFilePath)
-#    outputDirPath = basedir+"_"+outputDirnameSuffix
     t2000 = wrffilexr.T2
     t2 = t2000.isel(Time=observationIndex).squeeze()
     xlat  = wrffilexr.XLAT.to_numpy()[0,:,:]
@@ -675,28 +684,138 @@ def plot_rgb():
     plt.axis("off")
     plt.savefig(postprocessingDir + "/" + "brightness_temperature_rgb.png")
 
-if __name__ == "__main__":
-    if not postprocessingEnabled:
-        make_inputdata()
-    else:
-        postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
-        postprocessingDir = wrfFileName+"_"+postprocessing_directory_suffix
-        image_plot_enabled = namelist["postprocessing"]['image_plot_all_bands']
-        rgb_plot_enabled = namelist["postprocessing"]['RGB_plot_brightness_temperature']['enabled']
-        print("Postprocessing ...")
-        #if not os.path.isdir(postprocessingDir):
-        if not os.path.isdir(outputDirPath):
-            print(f"Warning: The postprocessing directory ({postprocessingDir}) and RTTOV outputs are not availabe.")
-            print("Disable postprocessing and run to make the profile files.")
+def run_postprocessing():
+    # postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
+    # postprocessingDir = wrfFileName+"_"+postprocessing_directory_suffix
+    image_plot_enabled = namelist["postprocessing"]['image_plot_all_bands']
+    rgb_plot_enabled = namelist["postprocessing"]['RGB_plot_brightness_temperature']['enabled']
+    print("Postprocessing ...")
+    #if not os.path.isdir(postprocessingDir):
+    if not os.path.isdir(outputDirPath):
+        print(f"Warning: The postprocessing directory ({postprocessingDir}) and RTTOV outputs are not availabe.")
+        print("Disable postprocessing and run to make the profile files.")
+        print("Exiting ..")
+        exit()
+    print(f"Converting the RTTOV output within the ({postprocessingDir}) directory to NetCDF files ..")
+    make_netcdf()
+    if image_plot_enabled:
+        if os.path.isdir(postprocessingDir):
+            print(f"Looking for the RTTOV NetCDF outputs in {postprocessingDir} ..")
+            plot_png()
+    if rgb_plot_enabled:
+        if os.path.isdir(postprocessingDir):
+            print(f"Looking for the RTTOV NetCDF outputs for brightness temperature in {postprocessingDir} ..")
+            plot_rgb()
+
+def verification():
+    required_modules = ["satpy", "xesmf"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
             print("Exiting ..")
-            exit()
-        print(f"Converting the RTTOV output within the ({postprocessingDir}) directory to NetCDF files ..")
-        make_netcdf()
-        if image_plot_enabled:
-            if os.path.isdir(postprocessingDir):
-                print(f"Looking for the RTTOV NetCDF outputs in {postprocessingDir} ..")
-                plot_png()
-        if rgb_plot_enabled:
-            if os.path.isdir(postprocessingDir):
-                print(f"Looking for the RTTOV NetCDF outputs for brightness temperature in {postprocessingDir} ..")
-                plot_rgb()
+            sys.exit()
+    from satpy import Scene
+    import xesmf as xe
+    # from xesmf.util import add_corners
+    from modules.satpy_readers import satpy_readers
+    sensor_id = namelist["verification"]['satellite_sensor_id']
+    satelliteDataPath = namelist["verification"]['satellite_file_path']
+    keepRemappedEnabled = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['enabled']
+    verification_directory_suffix = namelist["verification"]['verification_directory_suffix']
+    verificationDir = wrfFileName+"_"+verification_directory_suffix
+    wrf = xr.open_dataset(wrfFilePath)
+    all_scenes = Scene(reader=satpy_readers.get(sensor_id), filenames=[satelliteDataPath])
+    all_scenes.load([all_scenes.all_dataset_names()[ii-1] for ii in satChannels000], calibration='radiance')
+    scnArea = all_scenes[all_scenes._datasets.keys()[0].get("name")].attrs["area"]
+    lons, lats = scnArea.get_lonlats()
+    lons = np.where(np.isinf(lons), np.nan, lons)
+    lats = np.where(np.isinf(lats), np.nan, lats)
+    lat_wrf = wrf['XLAT'].isel(Time=0)
+    lon_wrf = wrf['XLONG'].isel(Time=0)
+    source_grid = xr.Dataset({'lat': (['y', 'x'], lats), 'lon': (['y', 'x'], lons)})
+    # source_grid = add_corners(source_grid)
+    target_grid = xr.Dataset({'lat': lat_wrf, 'lon': lon_wrf})
+    print("Regridding between the satellite and the WRF data.")
+    print("Can take a few minutes. Please wait ..")
+    regridder = xe.Regridder(source_grid, target_grid, method='bilinear') # mass conservative method for radiance as a flux
+    radiance_file = glob(os.path.join(postprocessingDir, "radiance*.nc"))
+    if radiance_file:
+        radiance_netcdf = xr.open_dataset(radiance_file[0])
+    else:
+        print("No radiance NetCDF file found in", postprocessingDir)
+        pirnt("Exiting ..")
+        exit()
+    bandName_iter = iter(bandNames)
+    std_list = []
+    rmse_list = []
+    cor_list = []
+    if not os.path.exists(verificationDir):
+        os.makedirs(verificationDir, exist_ok=True)
+    for scn in all_scenes:
+        print("Verification processing on the satellite", scn.attrs["platform_name"], "- band", scn.attrs["name"])
+        scn_regridded_to_wrf = regridder(scn)
+        if keepRemappedEnabled:
+            remappedFileName = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['remapped_file_name']
+            band_name = scn.attrs["name"]
+            print("Remapping satellite data on the WRF grid structure ..")
+            scn_regridded_to_wrf.to_dataset(name=band_name).drop_vars("crs").to_netcdf(os.path.join(verificationDir, remappedFileName + "_" + band_name + ".nc"))
+        bandFromRadiation_xarray = radiance_netcdf[next(bandName_iter)]
+        for key in ["units", "sensor", "name", "standard_name", "platform_name"]:
+            value = scn.attrs.get(key)
+            scn_regridded_to_wrf.attrs[key] = str(value) if key == "wavelength" else value
+        scn_regridded_to_wrf_ref = scn_regridded_to_wrf.values.flatten()
+        bandFromWRFRadiation_xarray_ref = bandFromRadiation_xarray.values.flatten()
+        mask = ~np.isnan(scn_regridded_to_wrf_ref) & ~np.isnan(bandFromWRFRadiation_xarray_ref)
+        scn_regridded_to_wrf_ref = scn_regridded_to_wrf_ref[mask]
+        bandFromWRFRadiation_xarray_ref = bandFromWRFRadiation_xarray_ref[mask]
+        std_list.append(np.std(bandFromWRFRadiation_xarray_ref)/np.std(scn_regridded_to_wrf_ref))
+        rmse_list.append( (np.sqrt(np.mean((bandFromWRFRadiation_xarray_ref - scn_regridded_to_wrf_ref) ** 2))) / np.mean(bandFromWRFRadiation_xarray_ref) )
+        cor_list.append(np.corrcoef(scn_regridded_to_wrf_ref, bandFromWRFRadiation_xarray_ref)[0, 1])
+
+    required_modules = ["matplotlib.pyplot", "geocat.viz"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            sys.exit()
+    import matplotlib.pyplot as plt
+    import geocat.viz as gv
+    taylor_filename = namelist["verification"]['taylor_diagram_name']
+    # Create figure and TaylorDiagram instance
+    fig = plt.figure(figsize=(10, 10))
+    dia = gv.TaylorDiagram(fig=fig, label='REF')
+    # Add models to Taylor diagram
+    dia.add_model_set(std_list, cor_list, color='red', marker='o', label='Radiation', fontsize=16)
+    dia.add_model_name(bandNames, fontsize=16)
+    dia.add_contours(levels=np.arange(0, 1.1, 0.25), colors='lightgrey', linewidths=0.5)
+    dia.add_legend(fontsize=16)
+    print("Storing extracted values in NetCDF files ..")
+    plt.savefig( os.path.join(verificationDir, taylor_filename+".png"))
+
+    wholeStatistics = [std_list, rmse_list, cor_list]
+    rownames = ["CV", "RMSE", "Correlation"]
+    col_width = max(len(h) for h in bandNames) + 2
+    rowname_width = max(len(r) for r in rownames) + 2
+    header = f"{'':<{rowname_width}}" + " ".join(f"{h:<{col_width}}" for h in bandNames)
+    rows = [
+        f"{rowname:<{rowname_width}}" + " ".join(f"{val:.3f}".ljust(col_width) for val in row)
+        for rowname, row in zip(rownames, wholeStatistics)
+    ]
+    table_str = "\n".join([header] + rows)
+    with open(os.path.join(verificationDir, taylor_filename+"_table.txt"), "w") as f:
+        f.write(table_str)
+
+if __name__ == "__main__":
+    if satelliteVerificationEnabled:
+        verification()
+        sys.exit()
+    if postprocessingEnabled:
+        run_postprocessing()
+    else:
+        make_inputdata()
