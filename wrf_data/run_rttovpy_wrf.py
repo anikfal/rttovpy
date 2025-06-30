@@ -708,7 +708,7 @@ def run_postprocessing():
             plot_rgb()
 
 def verification():
-    required_modules = ["satpy", "xesmf"]
+    required_modules = ["satpy", "xesmf", "pyresample"]
     for module in required_modules:
         try:
             importlib.import_module(module)
@@ -719,16 +719,34 @@ def verification():
             sys.exit()
     from satpy import Scene
     import xesmf as xe
+    from pyresample.geometry import AreaDefinition
     # from xesmf.util import add_corners
     from modules.satpy_readers import satpy_readers
     sensor_id = namelist["verification"]['satellite_sensor_id']
-    satelliteDataPath = namelist["verification"]['satellite_file_path']
     keepRemappedEnabled = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['enabled']
+    groupSatFilesEnabled = namelist["verification"]['satellite_files_group']['enabled']
     verification_directory_suffix = namelist["verification"]['verification_directory_suffix']
     verificationDir = wrfFileName+"_"+verification_directory_suffix
     wrf = xr.open_dataset(wrfFilePath)
-    all_scenes = Scene(reader=satpy_readers.get(sensor_id), filenames=[satelliteDataPath])
-    all_scenes.load([all_scenes.all_dataset_names()[ii-1] for ii in satChannels000], calibration='radiance')
+    if groupSatFilesEnabled:
+        groupSatFilesDir = namelist["verification"]['satellite_files_group']['satellite_file_directory']
+        all_scenes0 = Scene(reader=satpy_readers.get(sensor_id), filenames=glob(os.path.join(groupSatFilesDir, '*')))
+    else:
+        satelliteDataPath = namelist["verification"]['satellite_file_path']
+        all_scenes0 = Scene(reader=satpy_readers.get(sensor_id), filenames=[satelliteDataPath])
+
+    # all_scenes.load([all_scenes.all_dataset_names()[ii-1] for ii in satChannels000], calibration='radiance')
+    all_scenes0.load(bandNames, calibration='radiance')
+    firstdata = all_scenes0[all_scenes0.available_dataset_names()[0]]
+    atts = firstdata.attrs['area']
+    new_area = AreaDefinition(area_id=atts.area_id,
+                            description=atts.description,
+                            proj_id=atts.proj_id,
+                            projection=atts.proj_dict,
+                            width=atts.width/10,
+                            height=atts.height/10,
+                            area_extent=atts.area_extent)
+    all_scenes = all_scenes0.resample(new_area)
     scnArea = all_scenes[all_scenes._datasets.keys()[0].get("name")].attrs["area"]
     lons, lats = scnArea.get_lonlats()
     lons = np.where(np.isinf(lons), np.nan, lons)

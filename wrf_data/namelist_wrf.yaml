@@ -17,8 +17,8 @@ wrfchem_dust_profiles:
 
 satellite_information:
   sat_name_index: 1
-  sat_channel_list: [4, 6, 7]
-  sat_channel_names: [red, green, blue]  # any arbitrary names corresponding to the values of sat_channel_list
+  sat_channel_list: [5, 6] #[4, 6, 7]
+  sat_channel_names: [B5, B6]  #[red, green, blue]  # any arbitrary names corresponding to the values of sat_channel_list
   user_defined_position:
     enabled: true
     sat_latitude: 33
@@ -36,11 +36,14 @@ postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs
     Blue: blue
 
 verification:
-  enabled: false
+  enabled: true
   verification_directory_suffix: rttov_outputs_verification
   satellite_file_path: /home/anikfal/extra_codes/msgseviri/msg/zdata/MSG1-SEVI-MSG15-0100-NA-20220516122742.057000000Z-NA.nat
-  satellite_sensor_id: 53
-  taylor_diagram_name: radiation_taylor_diagram
+  satellite_files_group: # if set to enabled, satellite_file_path would be skipped
+    enabled: true
+    satellite_file_directory: /home/anikfal/training/data/samplelandsat
+  satellite_sensor_id: 47 #53
+  taylor_diagram_name: radiation_taylor_diagram_landsat
   keep_remapped_satellite_to_wrf_data:  # Keep the NetCDF data of the remapped satellite data to the WRF grid structure
     enabled: true
-    remapped_file_name: msg_to_wrf
+    remapped_file_name: landsat_to_wrf #msg_to_wrf
