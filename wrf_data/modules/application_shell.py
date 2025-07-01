@@ -1,5 +1,5 @@
 import os
-def make_final_application_shell(rttovCoef, varShape, satChannels, rttov_install_path):
+def make_final_application_shell(rttovCoef, varShape, satChannels, satChannelCount, rttov_install_path):
     with open('modules/run_wrf_example_fwd.sh', 'r') as file:
         runScript = file.readlines()
     file.close()
@@ -9,6 +9,8 @@ def make_final_application_shell(rttovCoef, varShape, satChannels, rttov_install
             runScript[index] = 'COEF_FILENAME='+rttovCoef+'\n'
         if line.startswith('NLEVELS='):
             runScript[index] = 'NLEVELS='+varShape+'\n'
+        if line.startswith('NCHAN='):
+            runScript[index] = 'NCHAN='+satChannelCount+'\n'
         if line.startswith('CHAN_LIST='):
             runScript[index] = 'CHAN_LIST="'+satChannels+'"\n'
         if line.startswith('TEST_DIR='):
@@ -20,7 +22,7 @@ def make_final_application_shell(rttovCoef, varShape, satChannels, rttov_install
         os.chmod('run_wrf_example_fwd.sh', 0o755)
     rttovRunFile.close()
 
-def make_final_dust_application_shell(rttovCoef, varShape, satChannels, rttov_install_path, aerosol_coeff_path):
+def make_final_dust_application_shell(rttovCoef, varShape, satChannels, satChannelCount, rttov_install_path, aerosol_coeff_path):
     with open('modules/run_wrfchem_dust_example_fwd.sh', 'r') as file:
         runScript = file.readlines()
     file.close()
@@ -30,6 +32,8 @@ def make_final_dust_application_shell(rttovCoef, varShape, satChannels, rttov_in
             runScript[index] = 'COEF_FILENAME='+rttovCoef+'\n'
         if line.startswith('NLEVELS='):
             runScript[index] = 'NLEVELS='+varShape+'\n'
+        if line.startswith('NCHAN='):
+            runScript[index] = 'NCHAN='+satChannelCount+'\n'
         if line.startswith('CHAN_LIST='):
             runScript[index] = 'CHAN_LIST="'+satChannels+'"\n'
         if line.startswith('TEST_DIR='):

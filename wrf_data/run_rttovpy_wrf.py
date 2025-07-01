@@ -102,7 +102,7 @@ def make_inputdata():
         profilesList000 = os.listdir(dirName)
         profilesList = [var for var in profilesList000 if (var.startswith("prof-") and var.endswith(".dat"))]
         pressureLevelsSize = count_lines.count_lines_between(dirName+profilesList[0], "! Pressure levels (hPa)", "! Temperature profile (K)") - 2
-        application_shell.make_final_application_shell(rttovCoef, str(pressureLevelsSize), satChannels, rttov_install_path)
+        application_shell.make_final_application_shell(rttovCoef, str(pressureLevelsSize), satChannels, str(len(satChannels000)), rttov_install_path)
         print("- The file 'run_wrf_example_fwd.sh' has been made")
         exit()
 
@@ -114,8 +114,8 @@ def make_inputdata():
         print(f"An error occurred while creating {dirName}: {error}")
 
     orb = Orbital(satNameFile[satIndex])
-    # satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
-    satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
+    satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
+    # satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
     satAltitude = satPositions[2]
     if(angleEnable):
         print("Simulation with user defined satellite position:")
@@ -313,7 +313,7 @@ def make_inputdata():
         print("")
         print("==================================================================")
         print("Making the shellscript application for the RTTOV forward model ...")
-        application_shell.make_final_application_shell(rttovCoef, str(varShape[0]), satChannels, rttov_install_path)
+        application_shell.make_final_application_shell(rttovCoef, str(varShape[0]), satChannels, str(len(satChannels000)), rttov_install_path)
         print("The file run_wrf_example_fwd.sh has been made successfully.")
     else:
         aerosol_coefficient_file_path = namelist["wrfchem_dust_profiles"]['aerosol_coefficient_file_path']
@@ -325,7 +325,7 @@ def make_inputdata():
         print("")
         print("==================================================================")
         print("Making the shellscript application for the RTTOV forward model ...")
-        application_shell.make_final_dust_application_shell(rttovCoef, str(varShape[0]), satChannels, rttov_install_path, aerosol_coefficient_file_path)
+        application_shell.make_final_dust_application_shell(rttovCoef, str(varShape[0]), satChannels, str(len(satChannels000)), rttov_install_path, aerosol_coefficient_file_path)
         print("The file run_wrf_example_fwd.sh has been made successfully.")
 
 def make_dust_profile():
@@ -685,12 +685,9 @@ def plot_rgb():
     plt.savefig(postprocessingDir + "/" + "brightness_temperature_rgb.png")
 
 def run_postprocessing():
-    # postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
-    # postprocessingDir = wrfFileName+"_"+postprocessing_directory_suffix
     image_plot_enabled = namelist["postprocessing"]['image_plot_all_bands']
     rgb_plot_enabled = namelist["postprocessing"]['RGB_plot_brightness_temperature']['enabled']
     print("Postprocessing ...")
-    #if not os.path.isdir(postprocessingDir):
     if not os.path.isdir(outputDirPath):
         print(f"Warning: The postprocessing directory ({postprocessingDir}) and RTTOV outputs are not availabe.")
         print("Disable postprocessing and run to make the profile files.")
