@@ -1,5 +1,6 @@
 rttov_installation_path: /home/anikfal/WRFDA/rttov12
 rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/rttov9pred54L/rtcoef_landsat_8_oli.dat
+solar_radiation_simulation: true  # Required for wavelengths less than 3 microns
 wrf_file_path: /home/anikfal/postwrf/zkuwaitoutputs/wrfout_d01_2022-05-15_00_kuwaitfirst
 
 time_of_simulation:
@@ -18,7 +19,7 @@ wrfchem_dust_profiles:
 satellite_information:
   sat_name_index: 4 #1
   sat_channel_list: [5, 6] #[4, 6, 7]
-  sat_channel_names: [B5, B6]  #[red, green, blue]  # any arbitrary names corresponding to the values of sat_channel_list
+  sat_channel_names: [B5, B6]  # The exact corresponding band name(s) in the satellite data are required
   user_defined_position:
     enabled: true
     sat_latitude: 33
@@ -31,12 +32,12 @@ postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs
   image_plot_all_bands: true
   RGB_plot_brightness_temperature:
     enabled: false
-    Red: red + green
-    Green: green
-    Blue: blue
+    Red: B5 + B6 + B7
+    Green: B5
+    Blue: B7
 
 verification:
-  enabled: false
+  enabled: true
   verification_directory_suffix: rttov_outputs_verification
   satellite_file_path: /home/anikfal/extra_codes/msgseviri/msg/zdata/MSG1-SEVI-MSG15-0100-NA-20220516122742.057000000Z-NA.nat
   satellite_files_group: # if enabled, satellite_file_path would be skipped
