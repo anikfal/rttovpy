@@ -25,6 +25,7 @@ postprocessingEnabled = namelist["postprocessing"]['enabled']
 dust = namelist["wrfchem_dust_profiles"]['enabled']
 satelliteVerificationEnabled = namelist["verification"]['enabled']
 wrfFilePath = namelist["wrf_file_path"]
+solar_radiation_simulation = namelist["solar_radiation_simulation"]
 wrfFileName = os.path.basename(wrfFilePath)
 wrffile = nc.Dataset(wrfFilePath)
 minuteArr = wrffile.variables["XTIME"]
@@ -98,11 +99,11 @@ def make_inputdata():
 
     # if os.path.exists(dirName) and os.path.isdir(dirName):
     if os.path.isdir(dirName) and bool(os.listdir(dirName)):
-        print("- Using the previously downloaded data in", dirName, "to make the final RTTOV shell application")
+        print(f"- Using the previously created inupt data extracted from {wrfFileName}, stored in", dirName, "to make the final RTTOV shell application")
         profilesList000 = os.listdir(dirName)
         profilesList = [var for var in profilesList000 if (var.startswith("prof-") and var.endswith(".dat"))]
         pressureLevelsSize = count_lines.count_lines_between(dirName+profilesList[0], "! Pressure levels (hPa)", "! Temperature profile (K)") - 2
-        application_shell.make_final_application_shell(rttovCoef, str(pressureLevelsSize), satChannels, str(len(satChannels000)), rttov_install_path)
+        application_shell.make_final_application_shell(rttovCoef, str(pressureLevelsSize), satChannels, str(len(satChannels000)), rttov_install_path, solar_radiation_simulation)
         print("- The file 'run_wrf_example_fwd.sh' has been made")
         exit()
 
@@ -313,7 +314,7 @@ def make_inputdata():
         print("")
         print("==================================================================")
         print("Making the shellscript application for the RTTOV forward model ...")
-        application_shell.make_final_application_shell(rttovCoef, str(varShape[0]), satChannels, str(len(satChannels000)), rttov_install_path)
+        application_shell.make_final_application_shell(rttovCoef, str(varShape[0]), satChannels, str(len(satChannels000)), rttov_install_path, solar_radiation_simulation)
         print("The file run_wrf_example_fwd.sh has been made successfully.")
     else:
         aerosol_coefficient_file_path = namelist["wrfchem_dust_profiles"]['aerosol_coefficient_file_path']
@@ -325,11 +326,11 @@ def make_inputdata():
         print("")
         print("==================================================================")
         print("Making the shellscript application for the RTTOV forward model ...")
-        application_shell.make_final_dust_application_shell(rttovCoef, str(varShape[0]), satChannels, str(len(satChannels000)), rttov_install_path, aerosol_coefficient_file_path)
+        application_shell.make_final_dust_application_shell(rttovCoef, str(varShape[0]), satChannels, str(len(satChannels000)), rttov_install_path, aerosol_coefficient_file_path, solar_radiation_simulation)
         print("The file run_wrf_example_fwd.sh has been made successfully.")
 
 def make_dust_profile():
-    from modules import count_lines, application_shell
+    # from modules import count_lines, application_shell
     from math import pi
     from wrf import getvar, disable_xarray
     disable_xarray()
@@ -705,7 +706,7 @@ def run_postprocessing():
             plot_rgb()
 
 def verification():
-    required_modules = ["satpy", "xesmf", "pyresample"]
+    required_modules = ["satpy", "xesmf", "pyresample", "pyproj"]
     for module in required_modules:
         try:
             importlib.import_module(module)
@@ -717,6 +718,7 @@ def verification():
     from satpy import Scene
     import xesmf as xe
     from pyresample.geometry import AreaDefinition
+    from pyproj import CRS, Transformer
     # from xesmf.util import add_corners
     from modules.satpy_readers import satpy_readers
     sensor_id = namelist["verification"]['satellite_sensor_id']
@@ -735,14 +737,42 @@ def verification():
     # all_scenes.load([all_scenes.all_dataset_names()[ii-1] for ii in satChannels000], calibration='radiance')
     all_scenes0.load(bandNames, calibration='radiance')
     firstdata = all_scenes0[all_scenes0.available_dataset_names()[0]]
-    atts = firstdata.attrs['area']
-    new_area = AreaDefinition(area_id=atts.area_id,
-                            description=atts.description,
-                            proj_id=atts.proj_id,
-                            projection=atts.proj_dict,
-                            width=atts.width/10,
-                            height=atts.height/10,
-                            area_extent=atts.area_extent)
+    upscale_ratio = (wrffile.DX / firstdata.resolution) #/ 2
+    import warnings
+    warnings.filterwarnings(
+        "ignore",
+        category=UserWarning,
+        message=".*important projection information.*"
+    )
+    proj_source_dictionary = firstdata.attrs['area'].proj_dict
+    proj_source = CRS.from_user_input(proj_source_dictionary)
+    proj_target = CRS.from_epsg(4326) # Define target CRS (WGS84 lat/lon)
+    transformer = Transformer.from_crs(proj_source, proj_target, always_xy=True)  # Build transformer
+
+    # Example: convert a point in UTM 38N to lat/lon
+    x, y = 600000, 4300000
+    lon, lat = transformer.transform(x, y)
+
+    # new_area = AreaDefinition(area_id=atts.area_id,
+    #                         description=atts.description,
+    #                         proj_id=atts.proj_id,
+    #                         projection=atts.proj_dict,
+    #                         width=int(atts.width/upscale_ratio),
+    #                         height=int(atts.height/upscale_ratio),
+    #                         area_extent=atts.area_extent)
+    # exit()
+    # new_area = AreaDefinition(area_id="latlon_geo",
+    #                         description="upscaled data",
+    #                         proj_id="any_id",
+    #                         projection={'proj': 'longlat', 'datum': 'WGS84'},
+    #                         width=int(firstdata.x.size / upscale_ratio),
+    #                         height=int(firstdata.y.size / upscale_ratio),
+    #                         area_extent=[wrf.XLONG.min().item(), wrf.XLAT.min().item(), wrf.XLONG.max().item(), wrf.XLAT.max().item()])
+    #                         # area_extent=[40, 20, 65, 40])  #(ll_x, lower_left_y, ur_x, upper_right_y)
+    print(lon, lat)
+    print("---------------------------------------------")
+    exit()
+
     all_scenes = all_scenes0.resample(new_area)
     scnArea = all_scenes[all_scenes._datasets.keys()[0].get("name")].attrs["area"]
     lons, lats = scnArea.get_lonlats()
