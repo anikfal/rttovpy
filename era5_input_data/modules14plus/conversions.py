@@ -1,6 +1,7 @@
 import numpy as np
 
 def surface_humidity(t2m_dew, p2m):
+    # Magnus constants
     a1 = 611.21 #Pa
     a3_liquid = 17.502
     a4_liquid = 32.19 #K

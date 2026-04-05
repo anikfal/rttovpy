@@ -56,11 +56,10 @@ postprocessingEnabled = namelist["postprocessing"]['enabled']
 import numpy as np
 import xarray as xr
 print("before make_inputdata()")
+
 def make_inputdata():
     print("Making profile files for RTTOV ..")
-    # --------------------------------------------------
-    # 0. Check existing profiles
-    # --------------------------------------------------
+
     if os.path.exists(dirName) and os.path.isdir(dirName):
         print("Using existing profile directory:", dirName)
         profiles = [f for f in os.listdir(dirName) if f.startswith("prof-")]
@@ -78,21 +77,14 @@ def make_inputdata():
             )
             return
 
-    # --------------------------------------------------
-    # 1. Input GRIB files
-    # --------------------------------------------------
     try:
         era5_surface_file = era5_surface_file000[0]
         era5_level_file = era5_level_file000[0]
-        print(f"Using GRIB files:\n  {era5_surface_file}\n  {era5_level_file}")
     except:
         raise RuntimeError("GRIB files not found")
 
     os.makedirs(dirName, exist_ok=True)
 
-    # --------------------------------------------------
-    # 2. Load GRIB data
-    # --------------------------------------------------
     level_ds = xr.open_dataset(
         era5_level_file,
         engine="cfgrib",
@@ -105,10 +97,7 @@ def make_inputdata():
         backend_kwargs={"indexpath": ""}
     )
 
-    # --------------------------------------------------
-    # 3. Extract variables
-    # --------------------------------------------------
-    temperature = level_ds.t.values        # (level, lat, lon)
+    temperature = level_ds.t.values
     qv = level_ds.q.values
 
     t2m = surface_ds.t2m.values
@@ -118,18 +107,14 @@ def make_inputdata():
     v10 = surface_ds.v10.values
     skinT = surface_ds.skt.values
     landSeaMask = surface_ds.lsm.values
-    soilType = surface_ds.slt.values
     geopotential = surface_ds.z.values
     cloudFraction = surface_ds.tcc.values
 
     lat = surface_ds.latitude.values
     lon = surface_ds.longitude.values
 
-    # --------------------------------------------------
-    # 4. Compute half & full level pressures
-    # --------------------------------------------------
+    # --- pressure ---
     pv = np.array(level_ds.t.attrs["GRIB_pv"])
-
     n_half = len(pv) // 2
     a_half = pv[:n_half]
     b_half = pv[n_half:]
@@ -137,19 +122,13 @@ def make_inputdata():
     a_3d = a_half[:, None, None]
     b_3d = b_half[:, None, None]
 
-    p_half = a_3d + b_3d * sp  # (138, lat, lon)
+    p_half = a_3d + b_3d * sp
 
-    # Full levels (for RTTOV)
-    p_full = 0.5 * (p_half[:-1] + p_half[1:]) / 100.0  # → hPa
+    # --- FIX top level using log extrapolation ---
+    p_half[0, :, :] = (p_half[1, :, :] ** 2) / p_half[2, :, :]
 
-    # --------------------------------------------------
-    # 5. Derived variables
-    # --------------------------------------------------
-    q2m = surface_humidity(t2m, sp)
+    q2m = surface_humidity(d2m, sp)
 
-    # --------------------------------------------------
-    # 6. Satellite geometry
-    # --------------------------------------------------
     year = namelist["time_of_simulation"]["year"]
     month = namelist["time_of_simulation"]["month"]
     day = namelist["time_of_simulation"]["day"]
@@ -167,70 +146,77 @@ def make_inputdata():
         satLat = satPositions[1]
         satLon = satPositions[0]
 
-    # --------------------------------------------------
-    # 7. Loop over grid
-    # --------------------------------------------------
     nlev, jjmax, iimax = temperature.shape
+    # print("Number of levels:", nlev+1)
+    # exit()
     profileCount = 1
+    header_written = False
 
     for jj in range(jjmax):
         for ii in range(iimax):
-
-            print(f"Profile jj={jj+1}/{jjmax}, ii={ii+1}/{iimax}")
-
+            print("Creating profile data for each grid point within the WRF domain ..", end="\r")
             profile_file = f"prof-{profileCount:06}.dat"
-            profileCount += 1
 
             with open(profile_file, "w") as f:
 
-                # HEADER
-                f.write("! --- Start of profile ---\n")
+                if not header_written:
+                    f.write("! Specify input profiles for example_fwd.F90 and other example programs.\n")
+                    f.write("! Multiple profiles may be described: follow the same format for each one.\n")
+                    f.write("! Comment lines (starting with '!') are optional.\n!\n")
+                    f.write("! Gas units (must be same for all profiles)\n")
+                    f.write("! 0 => ppmv over dry air\n")
+                    f.write("! 1 => kg/kg over moist air\n")
+                    f.write("! 2 => ppmv over moist air\n!\n")
+                    f.write("  2\n!\n")
+                    header_written = True
 
-                # Pressure
+                f.write(f"! --- Profile {profileCount} ---\n")
+
+                # ===== SORT LEVELS (TOP → SURFACE) =====
+                p_col = p_half[:, jj, ii]
+                sort_idx = np.argsort(p_col)  # ascending
+
+                p_sorted = p_col[sort_idx]
+                T_sorted = temperature[:, jj, ii][sort_idx[:-1]]
+                q_sorted = qv[:, jj, ii][sort_idx[:-1]]
+
+                # --- Pressure ---
                 f.write("!\n! Pressure levels (hPa)\n!\n")
-                for lev in reversed(range(nlev)):
-                    f.write(f"{p_full[lev, jj, ii]}\n")
+                for val in p_sorted:
+                    f.write(f"{val/100.0:.6f}\n")
 
-                # Temperature
+                # --- Temperature ---
                 f.write("!\n! Temperature profile (K)\n!\n")
-                for lev in reversed(range(nlev)):
-                    f.write(f"{temperature[lev, jj, ii]}\n")
+                for val in T_sorted:
+                    f.write(f"{val:.6f}\n")
 
-                # Humidity
+                # --- Humidity ---
                 f.write("!\n! Water vapour profile (kg/kg)\n!\n")
-                for lev in reversed(range(nlev)):
-                    val = max(qv[lev, jj, ii], 1e-5)
-                    f.write(f"{val:.5f}\n")
+                for val in q_sorted:
+                    f.write(f"{max(val,1e-5):.6f}\n")
 
-                # Near surface
-                f.write("!\n! Near-surface variables\n!\n")
-                near_surface = [
-                    t2m[jj, ii],
-                    q2m[jj, ii],
-                    sp[jj, ii] / 100,
-                    u10[jj, ii],
-                    v10[jj, ii],
-                    100000
-                ]
-                f.write(" ".join(map(str, near_surface)) + "\n")
+                # --- Near surface ---
+                f.write("!\n! Near-surface variables:\n")
+                f.write("!  2m T (K)    2m q (ppmv)  10m wind u (m/s)  10m wind v (m/s)  wind fetch (m)\n!\n")
+                f.write(f"   {t2m[jj,ii]:.4f}    {q2m[jj,ii]:.4f}     {u10[jj,ii]:.3f}             {v10[jj,ii]:.4f}            100000.\n!\n")
 
-                # Skin
-                f.write("!\n! Skin variables\n!\n")
-                skin = [skinT[jj, ii], 35.0, 3.0, 5.0, 15.0, 0.1, 0.3]
-                f.write(" ".join(map(str, skin)) + "\n")
+                # --- Skin ---
+                f.write("! Skin variables:\n")
+                f.write("!  Skin T (K)  Salinity   FASTEM parameters for land surfaces\n!\n")
+                f.write(f"   {skinT[jj,ii]:.4f}    35.0       3.0 5.0 15.0 0.1 0.3\n!\n")
 
-                # Surface type
-                f.write("!\n! Surface type\n!\n")
-                surfaceType = [int(landSeaMask[jj, ii]), 1]
-                f.write(" ".join(map(str, surfaceType)) + "\n")
+                # --- Surface ---
+                f.write("! Surface type (0=land, 1=sea, 2=sea-ice) and water type (0=fresh, 1=ocean)\n!\n")
+                f.write(f"   {int(landSeaMask[jj,ii])}         1\n!\n")
 
-                # Elevation
-                f.write("!\n! Elevation / lat / lon\n!\n")
-                altitude = geopotential[jj, ii] / 9810
-                f.write(f"{altitude} {lat[jj]} {lon[ii]}\n")
+                # --- Elevation ---
+                f.write("! Elevation (km), latitude and longitude (degrees)\n!\n")
+                altitude = geopotential[jj, ii] / 9810.0
+                f.write(f"   {altitude:.3f}    {lat[jj]:.3f}   {lon[ii]:.3f}\n!\n")
 
-                # Angles
-                f.write("!\n! Satellite / solar angles\n!\n")
+                # --- Angles ---
+                f.write("! Sat. zenith and azimuth angles, solar zenith and azimuth angles (degrees)\n!\n")
+
                 obs = get_observer_look(
                     satLon, satLat, satAltitude,
                     observationTime,
@@ -246,15 +232,18 @@ def make_inputdata():
                 sunZen = sun[0] * 180 / pi
                 sunAz = sun[1] * 180 / pi
 
-                f.write(f"{satZen} {satAz} {sunZen} {sunAz}\n")
+                f.write(f"   {satZen:.3f}     {satAz:.3f}     {sunZen:.3f}     {sunAz:.3f}\n!\n")
 
-                # Cloud
-                f.write("!\n! Cloud info\n!\n")
-                f.write(f"500 {cloudFraction[jj, ii]}\n")
+                # --- Cloud ---
+                f.write("! Cloud top pressure (hPa) and cloud fraction for simple cloud scheme\n!\n")
+                f.write(f"   500.00    {cloudFraction[jj,ii]:.3f}\n")
 
                 f.write("!\n! --- End of profile ---\n")
 
             os.rename(profile_file, os.path.join(dirName, profile_file))
+            profileCount += 1
+    print("Profile files have been created for RTTOV. Total profiles:", profileCount-1)
+    application_shell.make_final_application_shell(rttovCoef, str(nlev+1), satChannels, rttov_install_path)
 
 def make_netcdf():
     try:
