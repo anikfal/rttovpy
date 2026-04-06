@@ -31,46 +31,44 @@ def main_dm():
     check_float(south)
     check_float(west)
     check_float(east)
-    filename_level = "era5data_pressure_levels_"+str(year)+"_"+str(month)+"_"+str(day)+"_"+areaName+".nc"
-    filename_surface = "era5data_surface_level_"+str(year)+"_"+str(month)+"_"+str(day)+"_"+areaName+".nc"
+    filename_level = "era5data_pressure_levels_"+str(year)+"_"+str(month)+"_"+str(day)+"_"+areaName+".grib"
+    filename_surface = "era5data_surface_level_"+str(year)+"_"+str(month)+"_"+str(day)+"_"+areaName+".grib"
     c = cdsapi.Client()
+    
+    #pressure level data
     myData =     {
-            'product_type': 'reanalysis',
-            'variable': [
-                'specific_humidity', 'temperature', 
-            ],
-            'pressure_level': [
-                '1','2','3','5','7','10','20','30','50','70','100','125','150','175','200','225','250','300','350','400',
-                '450','500','550','600','650','700','750','775','800','825','850','875','900','925','950','975','1000',
-            ],
-            'year': year,
-            'month': month,
-            'day': day,
+            "class": "ea",
+            "param": "130/133",
+            "stream": "oper",
+            "expver": "1",
+            "levelist": "/".join(str(i) for i in range(1, 138)), #levels 1 to 137
+            "levtype": "ml",
+            "date": str(year)+"-"+str(month).zfill(2)+"-"+str(day).zfill(2),
             'time': hour,
             'area': [ north, west, south, east ],
-            'format': 'netcdf',
+            "grid": [0.25, 0.25],
+            "type": "an",
         }
     print("  Downloading ERA5 data on the atmospheric pressure levels ..")
+    c.retrieve('reanalysis-era5-complete', myData).download(filename_level)
     print("-------------------------------------------------------------")
-    #c.retrieve('reanalysis-era5-pressure-levels', myData, filename_level)
-    c.retrieve('reanalysis-era5-pressure-levels', myData).download(filename_level)
+    
+    #single level data
     myData =     {
-        'product_type': 'reanalysis',
-        'variable': [
-            '2m_temperature', '2m_dewpoint_temperature', 'surface_pressure', '10m_u_component_of_wind', '10m_v_component_of_wind',
-            'skin_temperature', 'land_sea_mask', 'lake_cover', 'soil_type', 'geopotential', 'cloud_base_height', 'total_cloud_cover', 
-        ],
-        'year': year,
-        'month': month,
-        'day': day,
+        "class": "ea",
+        "param": "134.128/167.128/168.128/165.128/166.128/235.128/172.128/228.128/43.128/129.128/164.128/228014.128",
+        "stream": "oper",
+        "expver": "1",
+        "levtype": "sfc",
+        "date": str(year)+"-"+str(month).zfill(2)+"-"+str(day).zfill(2),
         'time': hour,
         'area': [ north, west, south, east ],
-        'format': 'netcdf',
+        "grid": [0.25, 0.25],
+        "type": "an",
     }
     print("  Downloading ERA5 surface data ..")
+    c.retrieve('reanalysis-era5-complete', myData).download(filename_surface)
     print("----------------------------------")
-    #c.retrieve('reanalysis-era5-single-levels', myData, filename_surface)
-    c.retrieve('reanalysis-era5-single-levels', myData).download(filename_surface)
 
 def check_integer(string_as_integer):
     try:
