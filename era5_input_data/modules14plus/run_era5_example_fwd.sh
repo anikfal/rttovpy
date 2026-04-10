@@ -32,6 +32,17 @@ for myprofile in $profile_directory/prof-*.dat; do
   fi
 
   filePath=`realpath $myprofile`
+  # --- Extract satellite zenith angle ---
+  sat_zenith=$(awk '/Sat\. zenith and azimuth/ {while (getline && /^[[:space:]]*!/); print $1}' "$filePath")
+  echo "Satellite zenith angle: $sat_zenith"
+  # --- Check condition ---
+  if awk "BEGIN {exit !($sat_zenith > 75)}"; then
+    echo "Profile $profileName has sat_zenith > 75 ($sat_zenith)"
+    echo "Skipping RTTOV for this profile."
+    echo "missing_value: zenith_angle" > $outputDir/output_example_fwd.dat_$profileName
+    continue
+  fi
+
   profileName=`basename $myprofile`
   echo Simulating based on $filePath
   ln -sf $filePath $TEST_DIR
@@ -77,9 +88,7 @@ if [ $? -eq 0 ]; then
   cd $CWD
   mv $TEST_DIR/output_example_fwd.dat $outputDir/output_example_fwd.dat_$profileName
 else
-  echo "Profile data " $profileName " has an issue (zenith angle > 75, etc)."
-  echo "Skipping this profile, and filling with missing value."
-  echo "missing_value" > $CWD/$outputDir/output_example_fwd.dat_$profileName
+  echo "missing_value: general_error" > $CWD/$outputDir/output_example_fwd.dat_$profileName
 fi
 cd $CWD
 rm $TEST_DIR/$profileName

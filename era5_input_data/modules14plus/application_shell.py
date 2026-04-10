@@ -1,5 +1,5 @@
 import os
-def make_final_application_shell(rttovCoef, varShape, satChannels, rttov_install_path):
+def make_final_application_shell(rttovCoef, varShape, do_solar, satChannels, satChannels_dim, rttov_install_path):
     with open('modules14plus/run_era5_example_fwd.sh', 'r') as file:
         runScript = file.readlines()
     file.close()
@@ -9,6 +9,10 @@ def make_final_application_shell(rttovCoef, varShape, satChannels, rttov_install
             runScript[index] = 'COEF_FILENAME='+rttovCoef+'\n'
         if line.strip().startswith('NLEVELS='):
             runScript[index] = 'NLEVELS='+varShape+'\n'
+        if line.strip().startswith('NCHAN='):
+            runScript[index] = 'NCHAN='+satChannels_dim+'\n'
+        if line.strip().startswith('DO_SOLAR='):
+            runScript[index] = 'DO_SOLAR='+do_solar+'\n'
         if line.strip().startswith('CHAN_LIST='):
             runScript[index] = 'CHAN_LIST="'+satChannels+'"\n'
         if line.strip().startswith('TEST_DIR='):

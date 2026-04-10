@@ -15,6 +15,7 @@ for module in required_modules:
 
 from modules14plus import era5_download_manager, count_lines, application_shell
 from modules14plus.conversions import surface_humidity
+from modules14plus.rttov_utils import requires_solar_for_channels
 import yaml, os
 import netCDF4 as nc
 from glob import glob
@@ -55,10 +56,22 @@ postprocessingEnabled = namelist["postprocessing"]['enabled']
 
 import numpy as np
 import xarray as xr
-print("before make_inputdata()")
 
 def make_inputdata():
-    print("Making profile files for RTTOV ..")
+    do_solar = int(namelist["solar_simulation"]['enabled'])
+    # --- CHECK SOLAR REQUIREMENT ---
+    need_solar, solar_channels, channel_info = requires_solar_for_channels(
+        rttovCoef,
+        satChannels000
+    )
+    if need_solar:
+        print(f"Channels requiring solar: {solar_channels}")
+        if not do_solar:
+            print("WARNING: solar_simulation is disabled, but solar channels detected.")
+            do_solar = 1
+            print(" solar_simulation is automatically set to true.")
+            # Option 2 (strict mode)
+            # raise RuntimeError("Solar channels selected but DO_SOLAR=0")
 
     if os.path.exists(dirName) and os.path.isdir(dirName):
         print("Using existing profile directory:", dirName)
@@ -72,18 +85,35 @@ def make_inputdata():
             application_shell.make_final_application_shell(
                 rttovCoef,
                 str(pressureLevelsSize),
+                str(do_solar),
                 satChannels,
+                str(len(satChannels000)),
                 rttov_install_path
             )
             return
 
-    try:
+    print("Making profile files for RTTOV ..")
+    if ( # check if ERA5 files are available before downloading
+        len(era5_surface_file000) > 0 and
+        len(era5_level_file000) > 0 and
+        os.path.exists(era5_surface_file000[0]) and
+        os.path.exists(era5_level_file000[0])
+    ):
         era5_surface_file = era5_surface_file000[0]
         era5_level_file = era5_level_file000[0]
-    except:
-        raise RuntimeError("GRIB files not found")
 
-    os.makedirs(dirName, exist_ok=True)
+        print(f"Using existing ERA5 files:")
+        print(f"  {era5_surface_file}")
+        print(f"  {era5_level_file}")
+
+    else:
+        print("ERA5 files not found. Downloading...")
+        era5_download_manager.main_dm()
+
+        era5_surface_file = glob("era5data_surface_level_*" + filePrefix + ".grib")[0]
+        era5_level_file = glob("era5data_pressure_levels_*" + filePrefix + ".grib")[0]
+    
+    os.makedirs(dirName)  # no need to check if it exists, as it's already been checked before
 
     level_ds = xr.open_dataset(
         era5_level_file,
@@ -150,7 +180,18 @@ def make_inputdata():
     # print("Number of levels:", nlev+1)
     # exit()
     profileCount = 1
-    header_written = False
+    header_text = """! Specify input profiles for example_fwd.F90 and other example programs.
+! Multiple profiles may be described: follow the same format for each one.
+! Comment lines (starting with '!') are optional.
+!
+! Gas units (must be same for all profiles)
+! 0 => ppmv over dry air
+! 1 => kg/kg over moist air
+! 2 => ppmv over moist air
+!
+2
+!
+"""
 
     for jj in range(jjmax):
         for ii in range(iimax):
@@ -159,16 +200,7 @@ def make_inputdata():
 
             with open(profile_file, "w") as f:
 
-                if not header_written:
-                    f.write("! Specify input profiles for example_fwd.F90 and other example programs.\n")
-                    f.write("! Multiple profiles may be described: follow the same format for each one.\n")
-                    f.write("! Comment lines (starting with '!') are optional.\n!\n")
-                    f.write("! Gas units (must be same for all profiles)\n")
-                    f.write("! 0 => ppmv over dry air\n")
-                    f.write("! 1 => kg/kg over moist air\n")
-                    f.write("! 2 => ppmv over moist air\n!\n")
-                    f.write("  2\n!\n")
-                    header_written = True
+                f.write(header_text)
 
                 f.write(f"! --- Profile {profileCount} ---\n")
 
@@ -243,7 +275,7 @@ def make_inputdata():
             os.rename(profile_file, os.path.join(dirName, profile_file))
             profileCount += 1
     print("Profile files have been created for RTTOV. Total profiles:", profileCount-1)
-    application_shell.make_final_application_shell(rttovCoef, str(nlev+1), satChannels, rttov_install_path)
+    application_shell.make_final_application_shell(rttovCoef, str(nlev+1), str(do_solar), satChannels, str(len(satChannels000)), rttov_install_path)
 
 def make_netcdf():
     try:
@@ -469,7 +501,7 @@ def plot_rgb():
 
 # if __name__ == "__main__":
 if not postprocessingEnabled:
-    print("Postprocessing is disabled. Running to make the profile files ..")
+    print("Postprocessing is disabled. Running to make the RTTOV profile files ..")
     make_inputdata()
 else:
     postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
