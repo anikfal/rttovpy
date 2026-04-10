@@ -3,7 +3,7 @@
 ## Author: Amirhossein Nikfal <https://github.com/anikfal>
 ###############################################################################
 import importlib
-required_modules = ["numpy", "netCDF4", "pyorbital"]
+required_modules = ["numpy", "netCDF4", "pyorbital", "cfgrib", "xarray", "yaml"]
 for module in required_modules:
     try:
         importlib.import_module(module)
@@ -17,12 +17,11 @@ from modules14plus import era5_download_manager, count_lines, application_shell
 from modules14plus.conversions import surface_humidity
 from modules14plus.rttov_utils import requires_solar_for_channels
 import yaml, os
-import netCDF4 as nc
 from glob import glob
 from pyorbital.orbital import get_observer_look
 from pyorbital.orbital import Orbital
 from pyorbital.astronomy import get_alt_az
-from datetime import datetime
+from datetime import datetime, timezone
 from math import pi
 
 with open('namelist_era5.yaml', 'r') as yaml_file:
@@ -42,10 +41,13 @@ if satIndex > 76:
     print("Warning: Satellite name index must be between 1 to 76. Please look inside <satellite_names.yaml>.")
     print("exiting ..")
     exit()
-angleEnable = namelist["satellite_information"]["user_defined_position"]['enabled']
+angleEnable = namelist["satellite_information"]["user_defined_sat_position"]['enabled']
 
 with open('satellite_names.yaml', 'r') as yaml_file:
     satNameFile = yaml.safe_load(yaml_file)
+
+with open('modules14plus/satellite_celestrak_urls.yaml', 'r') as yaml_file:
+    satCelestrakUrls = yaml.safe_load(yaml_file)
 
 filePrefix = namelist["area_of_simulation"]["domain_name"]
 dirName = filePrefix+"_profiles/"
@@ -166,12 +168,47 @@ def make_inputdata():
 
     observationTime = datetime(year, month, day, hour)
 
-    satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
+
+    # import requests
+    # session = requests.Session()
+    # session.headers.update({"User-Agent": "Mozilla/5.0"})
+    # payload = {
+    #     "identity": "ah.nikfal@gmail.com",
+    #     "password": "kjdfkjdf1234PP!."  # remember to change this!
+    # }
+    # login = session.post("https://www.space-track.org/ajaxauth/login", data=payload)
+    # print(login.status_code, login.text)
+
+
+
+    import requests
+    import tempfile
+    celestrak_url = satCelestrakUrls[satNameFile[satIndex]]
+    tel_text = requests.get(celestrak_url, timeout=10).text
+    # write to temp file
+    tmp = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    tmp.write(tel_text)
+    tmp.close()
+    try:
+        orb = Orbital(satNameFile[satIndex], tle_file=tmp.name)
+        print("Retrieving satellite specific information for", satNameFile[satIndex], "for the observation time:", observationTime)
+        satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
+    finally:
+        os.remove(tmp.name)
+
+
+
+    # orb = Orbital(satNameFile[satIndex])
+    # orb = Orbital(satNameFile[satIndex], tle_file="...")
+    # print("Retrieving satellite specific information for", satNameFile[satIndex], "for the observation time:", observationTime)
+    # print("please wait ..")
+    # satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
+    # satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
     satAltitude = satPositions[2]
 
     if angleEnable:
-        satLat = namelist["satellite_information"]["user_defined_position"]["sat_latitude"]
-        satLon = namelist["satellite_information"]["user_defined_position"]["sat_longitude"]
+        satLat = namelist["satellite_information"]["user_defined_sat_position"]["sat_latitude"]
+        satLon = namelist["satellite_information"]["user_defined_sat_position"]["sat_longitude"]
     else:
         satLat = satPositions[1]
         satLon = satPositions[0]
@@ -181,17 +218,17 @@ def make_inputdata():
     # exit()
     profileCount = 1
     header_text = """! Specify input profiles for example_fwd.F90 and other example programs.
-! Multiple profiles may be described: follow the same format for each one.
-! Comment lines (starting with '!') are optional.
-!
-! Gas units (must be same for all profiles)
-! 0 => ppmv over dry air
-! 1 => kg/kg over moist air
-! 2 => ppmv over moist air
-!
-2
-!
-"""
+    ! Multiple profiles may be described: follow the same format for each one.
+    ! Comment lines (starting with '!') are optional.
+    !
+    ! Gas units (must be same for all profiles)
+    ! 0 => ppmv over dry air
+    ! 1 => kg/kg over moist air
+    ! 2 => ppmv over moist air
+    !
+    2
+    !
+    """
 
     for jj in range(jjmax):
         for ii in range(iimax):
@@ -296,16 +333,18 @@ def make_netcdf():
         print(f"Two ERA5 data files starting from era5data_surface_level and era5data_pressure_levels are missing")
         print("You can run again the application if you don't have the files")
         exit()
-    era5filexr = xr.open_dataset(era5_surface_file, engine='netcdf4', mode='r')
+    # era5filexr = xr.open_dataset(era5_surface_file, engine='netcdf4', mode='r')
+    era5filexr = xr.open_dataset(era5_surface_file, engine='cfgrib',
+                                 backend_kwargs={"filter_by_keys": {"typeOfLevel": "surface"}, "indexpath": ""})
     allOutputs = glob(filePrefix+"_outputs/*")
-    t2000 = era5filexr.t2m
-    t2 = t2000.squeeze('valid_time')
+    t2 = era5filexr.t2m
+    # t2 = t2000.squeeze('valid_time')
     xlat  = era5filexr.latitude.to_numpy()
     xlong  = era5filexr.longitude.to_numpy()
     fillvalue = np.float32(-9999)
     jjmax = xlat.size
     iimax = xlong.size
-    fillerVar = t2000.to_numpy()[0,:,:]
+    fillerVar = t2.to_numpy()
     fillerVar[:] = 0
     brightnessTemperature = xr.Dataset(
         coords={
@@ -344,7 +383,7 @@ def make_netcdf():
     print("Extracting the RTTOV outputs and storing them in arrays ..")
     for jj in range(jjmax): #latitudesTemperature profile (K)
         for ii in range(iimax): #longitude
-            counter = jj*jjmax + ii
+            counter = jj*iimax + ii
             with open(allOutputs[counter], "r") as file:
                 first_line = file.readline()
                 if re.search("missing_value", first_line):
