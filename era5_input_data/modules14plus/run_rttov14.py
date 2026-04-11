@@ -13,9 +13,10 @@ for module in required_modules:
         print("Exiting ..")
         exit()
 
-from modules14plus import era5_download_manager, count_lines, application_shell
+from modules14plus import era5_download_manager, count_lines, application_shell, tle_fetcher
 from modules14plus.conversions import surface_humidity
 from modules14plus.rttov_utils import requires_solar_for_channels
+from modules14plus.choose_tle_source import choose_tle_source
 import yaml, os
 from glob import glob
 from pyorbital.orbital import get_observer_look
@@ -55,6 +56,7 @@ era5_surface_file000 = glob("era5data_surface_level_*" + filePrefix + ".grib")#[
 era5_level_file000 = glob("era5data_pressure_levels_*" + filePrefix + ".grib")#[0]
 rttovCoef = namelist["rttov_coefficient_file_path"]
 postprocessingEnabled = namelist["postprocessing"]['enabled']
+historicalTLE = namelist["satellite_information"]["historical_tle"]['enabled']
 
 import numpy as np
 import xarray as xr
@@ -166,35 +168,59 @@ def make_inputdata():
     day = namelist["time_of_simulation"]["day"]
     hour = namelist["time_of_simulation"]["hour"]
 
-    observationTime = datetime(year, month, day, hour)
+    observationTime = datetime(year, month, day, hour, tzinfo=timezone.utc)
+
+
+    if historicalTLE:
+        print("High precision satellite information enabled.")
+        spacetrack_user = namelist["satellite_information"]["historical_tle"]["space-track.org_username"]
+        spacetrack_password = namelist["satellite_information"]["historical_tle"]["space-track.org_password"]
+        with open('modules14plus/satellite_to_norad_id.yaml', 'r') as yaml_file:
+            satellite_norad_ids = yaml.safe_load(yaml_file)
+
+    tle_source_mode = choose_tle_source(observationTime, historicalTLE)
+    sat_name = satNameFile[satIndex]
+    try:
+        if tle_source_mode == "celestrak":
+            print(f"Using CelesTrak for {sat_name}")
+            orb = tle_fetcher.get_tle_celestrak(
+                sat_name,
+                satCelestrakUrls[sat_name]
+            )
+        else:
+            print(f"Using Space-Track (historical) for {sat_name}")
+            orb = tle_fetcher.get_tle_spacetrack_history(
+                sat_name,
+                satellite_norad_ids[sat_name],
+                observationTime,
+                spacetrack_user,
+                spacetrack_password
+            )
+    except Exception as e:
+        print(f"WARNING: TLE fetch failed ({e}), falling back to CelesTrak")
+
+        orb = tle_fetcher.get_tle_celestrak(
+            sat_name,
+            satCelestrakUrls[sat_name]
+        )
+
+    satPositions = orb.get_lonlatalt(observationTime)
 
 
     # import requests
-    # session = requests.Session()
-    # session.headers.update({"User-Agent": "Mozilla/5.0"})
-    # payload = {
-    #     "identity": "ah.nikfal@gmail.com",
-    #     "password": "kjdfkjdf1234PP!."  # remember to change this!
-    # }
-    # login = session.post("https://www.space-track.org/ajaxauth/login", data=payload)
-    # print(login.status_code, login.text)
-
-
-
-    import requests
-    import tempfile
-    celestrak_url = satCelestrakUrls[satNameFile[satIndex]]
-    tel_text = requests.get(celestrak_url, timeout=10).text
-    # write to temp file
-    tmp = tempfile.NamedTemporaryFile(mode="w", delete=False)
-    tmp.write(tel_text)
-    tmp.close()
-    try:
-        orb = Orbital(satNameFile[satIndex], tle_file=tmp.name)
-        print("Retrieving satellite specific information for", satNameFile[satIndex], "for the observation time:", observationTime)
-        satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
-    finally:
-        os.remove(tmp.name)
+    # import tempfile
+    # celestrak_url = satCelestrakUrls[satNameFile[satIndex]]
+    # tle_text = requests.get(celestrak_url, timeout=10).text
+    # # write to temp file
+    # tmp = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    # tmp.write(tle_text)
+    # tmp.close()
+    # try:
+    #     orb = Orbital(satNameFile[satIndex], tle_file=tmp.name)
+    #     print("Retrieving satellite specific information for", satNameFile[satIndex], "for the observation time:", observationTime)
+    #     satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
+    # finally:
+    #     os.remove(tmp.name)
 
 
 
