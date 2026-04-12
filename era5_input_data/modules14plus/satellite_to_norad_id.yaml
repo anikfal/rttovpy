@@ -1,0 +1,76 @@
+# EOS / Landsat
+"EOS-Aqua": 27424
+"EOS-Terra": 25994
+"Landsat-7": 25682
+"Landsat-8": 39084
+
+# Sentinel
+"Sentinel-3A": 41335
+"Sentinel-3B": 43437
+
+# NOAA series
+"NOAA-6": 11416
+"NOAA-7": 12553
+"NOAA-8": 13923
+"NOAA-9": 15427
+"NOAA-10": 16969
+"NOAA-11": 19531
+"NOAA-12": 21263
+"NOAA-14": 23455
+"NOAA-15": 25338
+"NOAA-16": 26536
+"NOAA-17": 27453
+"NOAA-18": 28654
+"NOAA-19": 33591
+"NOAA-20": 43013
+
+# Meteosat (MSG series included)
+"Meteosat-7": 24932
+"Meteosat-8": 27509
+"Meteosat-9": 28912
+"Meteosat-10": 38552
+"Meteosat-11": 40732
+"Meteosat-12": 54789  # MTG-I1 (latest generation)
+
+# GOES
+"GOES-13": 29155
+"GOES-14": 35491
+"GOES-15": 36411
+"GOES-16": 41866
+
+# Other polar / meteorological
+"Suomi-NPP": 37849
+"Himawari-8": 40267
+"Himawari-9": 41836
+"INSAT-3D": 39216
+
+# Altimetry / ocean
+"JASON-2": 33105
+
+# MetOp
+"Metop-A": 29499
+"Metop-B": 38771
+"Metop-C": 43689
+
+# ESA / research
+"SMOS": 36036
+"CloudSat": 29107
+"CALIPSO": 29108
+
+# DMSP
+"DMSP-F15": 25991
+"DMSP-F16": 28054
+"DMSP-F17": 29522
+"DMSP-F18": 32958
+"DMSP-F19": 39630
+
+# FY-2 (geostationary China)
+"FY-2D": 29640
+"FY-2E": 33463
+"FY-2G": 36828
+
+# FY-3 (polar China)
+"FY-3A": 32958  # note: overlaps historical catalog reuse
+"FY-3B": 37214
+"FY-3C": 39260
+"FY-3D": 43010
