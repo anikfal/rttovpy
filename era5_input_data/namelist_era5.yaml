@@ -1,14 +1,13 @@
 rttov_version: 14
 rttov_installation_path: /home/anikfal/WRFDA/rttov14
-# rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov14/rtcoef_rttov14/rttov13pred54L/rtcoef_noaa_16_avhrr_o3co2.dat
 rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov14/rtcoef_rttov14/rttov13pred54L/rtcoef_noaa_20_viirs_o3co2.dat
 solar_simulation: # in case of visible wavelengths, set to true to simulate the solar reflectance.
   enabled: false
 
 time_of_simulation:
   year: 2023
-  month: 3
-  day: 13
+  month: 4
+  day: 12
   hour: 12
 
 area_of_simulation:
@@ -20,19 +19,19 @@ area_of_simulation:
 
 satellite_information:
   sat_name_index: 20
-  sat_channel_list: [4, 5]
+  sat_channel_list: [18, 22]
   sat_channel_names: [band4, band5] #[red, green, blue] # Default band name. No need to be changed
   user_defined_sat_position:
     enabled: true
     sat_latitude: 47.5
     sat_longitude: 3.5
-  high_precision_sat_information: # If you want high precision, or if the time of simulation is months/years ago.
-    enabled: false
-    space-track.org_username: your_user_email
-    space-track.org_password: your_password
+  historical_tle:
+    enabled: true  # Enable retrieval of historical TLE from Space-Track when observation time is not recent
+    space-track.org_username: username1234
+    space-track.org_password: password1234
 
 postprocessing:  # Enable (=true) to make NetCDF and plots from the RTTOV outputs.
-  enabled: false
+  enabled: true
   postprocessing_directory_suffix: rttov_outputs_postprocessing #Default directory suffix. No need to be changed.
   image_plot_all_bands: true
   RGB_plot_brightness_temperature:

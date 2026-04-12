@@ -208,30 +208,6 @@ def make_inputdata():
             f"FATAL: Failed to retrieve TLE and compute satellite position for {sat_name}: {e}"
         )
 
-
-    # import requests
-    # import tempfile
-    # celestrak_url = satCelestrakUrls[satNameFile[satIndex]]
-    # tle_text = requests.get(celestrak_url, timeout=10).text
-    # # write to temp file
-    # tmp = tempfile.NamedTemporaryFile(mode="w", delete=False)
-    # tmp.write(tle_text)
-    # tmp.close()
-    # try:
-    #     orb = Orbital(satNameFile[satIndex], tle_file=tmp.name)
-    #     print("Retrieving satellite specific information for", satNameFile[satIndex], "for the observation time:", observationTime)
-    #     satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
-    # finally:
-    #     os.remove(tmp.name)
-
-
-
-    # orb = Orbital(satNameFile[satIndex])
-    # orb = Orbital(satNameFile[satIndex], tle_file="...")
-    # print("Retrieving satellite specific information for", satNameFile[satIndex], "for the observation time:", observationTime)
-    # print("please wait ..")
-    # satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
-    # satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
     satAltitude = satPositions[2]
 
     if angleEnable:
@@ -242,21 +218,19 @@ def make_inputdata():
         satLon = satPositions[0]
 
     nlev, jjmax, iimax = temperature.shape
-    # print("Number of levels:", nlev+1)
-    # exit()
     profileCount = 1
     header_text = """! Specify input profiles for example_fwd.F90 and other example programs.
-    ! Multiple profiles may be described: follow the same format for each one.
-    ! Comment lines (starting with '!') are optional.
-    !
-    ! Gas units (must be same for all profiles)
-    ! 0 => ppmv over dry air
-    ! 1 => kg/kg over moist air
-    ! 2 => ppmv over moist air
-    !
-    2
-    !
-    """
+! Multiple profiles may be described: follow the same format for each one.
+! Comment lines (starting with '!') are optional.
+!
+! Gas units (must be same for all profiles)
+! 0 => ppmv over dry air
+! 1 => kg/kg over moist air
+! 2 => ppmv over moist air
+!
+1
+!
+"""
 
     for jj in range(jjmax):
         for ii in range(iimax):
@@ -340,9 +314,11 @@ def make_inputdata():
             os.rename(profile_file, os.path.join(dirName, profile_file))
             profileCount += 1
     print("Profile files have been created for RTTOV. Total profiles:", profileCount-1)
-    application_shell.make_final_application_shell(rttovCoef, str(nlev+1), str(do_solar), satChannels, str(len(satChannels000)), rttov_install_path)
+    application_shell.make_final_application_shell(
+        rttovCoef, str(nlev+1), str(do_solar), satChannels, str(len(satChannels000)), rttov_install_path
+    )
 
-def make_netcdf():
+def make_netcdf(postprocessingDir):
     try:
         importlib.import_module("xarray")
     except:
@@ -354,21 +330,19 @@ def make_netcdf():
     import xarray as xr
     from glob import glob
     if os.path.exists(era5_surface_file000[0]) and os.path.exists(era5_level_file000[0]):
-            era5_surface_file = era5_surface_file000[0]
-            era5_level_file = era5_level_file000[0]
-            print(era5_surface_file, "and", era5_level_file)
+        era5_surface_file = era5_surface_file000[0]
+        era5_level_file = era5_level_file000[0]
+        print(era5_surface_file, "and", era5_level_file)
     else:
         print(f"Two ERA5 data files starting from era5data_surface_level and era5data_pressure_levels are missing")
         print("You can run again the application if you don't have the files")
         exit()
-    # era5filexr = xr.open_dataset(era5_surface_file, engine='netcdf4', mode='r')
     era5filexr = xr.open_dataset(era5_surface_file, engine='cfgrib',
                                  backend_kwargs={"filter_by_keys": {"typeOfLevel": "surface"}, "indexpath": ""})
     allOutputs = glob(filePrefix+"_outputs/*")
     t2 = era5filexr.t2m
-    # t2 = t2000.squeeze('valid_time')
-    xlat  = era5filexr.latitude.to_numpy()
-    xlong  = era5filexr.longitude.to_numpy()
+    xlat = era5filexr.latitude.to_numpy()
+    xlong = era5filexr.longitude.to_numpy()
     fillvalue = np.float32(-9999)
     jjmax = xlat.size
     iimax = xlong.size
@@ -409,7 +383,7 @@ def make_netcdf():
         emissivity[myband].attrs["units"] = ""
         emissivity[myband].attrs["long_name"] = "Calculated surface emissivities"
     print("Extracting the RTTOV outputs and storing them in arrays ..")
-    for jj in range(jjmax): #latitudesTemperature profile (K)
+    for jj in range(jjmax): #latitudes
         for ii in range(iimax): #longitude
             counter = jj*iimax + ii
             with open(allOutputs[counter], "r") as file:
@@ -471,7 +445,7 @@ def make_netcdf():
     print("Brightness temperature, Radiance, Overcast radiance, Surface to space transmittance," + \
             "and emissivities have been stored in NetCDF files")
 
-def plot_png():
+def plot_png(postprocessingDir):
     required_modules = ["matplotlib", "cartopy"]
     for module in required_modules:
         try:
@@ -492,7 +466,7 @@ def plot_png():
         for band in ds.data_vars.keys():
             print("Plotting", band, "of", ncFile)
             myvar = ds[band].copy(deep=True)
-            fig, ax = plt.subplots( subplot_kw=subplot_parameters, figsize=(8, 6) )
+            fig, ax = plt.subplots(subplot_kw=subplot_parameters, figsize=(8, 6))
             temp_plot = ax.pcolormesh(lon, lat, myvar, transform=ccrs.PlateCarree(), cmap="coolwarm")
             ax.coastlines()
             ax.add_feature(cfeature.BORDERS, linestyle=":")
@@ -510,7 +484,7 @@ def plot_png():
             ax.set_title(ds.attrs["title"] + " - " + band)
             plt.savefig(postprocessingDir + "/" + ds.attrs["title"]+ "_" + band + ".png")
 
-def plot_rgb():
+def plot_rgb(postprocessingDir):
     required_modules = ["matplotlib", "cartopy"]
     for module in required_modules:
         try:
@@ -566,45 +540,13 @@ def plot_rgb():
     plt.axis("off")
     plt.savefig(postprocessingDir + "/" + "brightness_temperature_rgb.png")
 
-# if __name__ == "__main__":
-# if not postprocessingEnabled:
-#     print("Postprocessing is disabled. Running to make the RTTOV profile files ..")
-#     make_inputdata()
-# else:
-#     postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
-#     postprocessingDir = filePrefix+"_"+postprocessing_directory_suffix
-#     rttov_output_dir = filePrefix+"_outputs"
-#     image_plot_enabled = namelist["postprocessing"]['image_plot_all_bands']
-#     rgb_plot_enabled = namelist["postprocessing"]['RGB_plot_brightness_temperature']['enabled']
-#     print("Postprocessing ...")
-#     if os.path.isdir(postprocessingDir): # NetCDF directory exists
-#         print(f"The postprocessing directory ({postprocessingDir}) already exists and may contain the NetCDF files.")
-#         print("Skipping making NetCDF files from RTTOV outputs.")
-#     else: # Making NetCDF files
-#         if not os.path.isdir(rttov_output_dir):
-#             print(f"Warning: The RTTOV outputs directory ({rttov_output_dir}) is not availabe.")
-#             print("Disable postprocessing and run to make the profile files.")
-#             print("Exiting ..")
-#             exit()
-#         print(f"Converting the RTTOV output within the ({rttov_output_dir}) directory to NetCDF files ..")
-#         make_netcdf()
-#     if image_plot_enabled:
-#         if os.path.isdir(postprocessingDir):
-#             print(f"Looking for the RTTOV NetCDF outputs in {postprocessingDir} ..")
-#             plot_png()
-#     if rgb_plot_enabled:
-#         if os.path.isdir(postprocessingDir):
-#             print(f"Looking for the RTTOV NetCDF outputs for brightness temperature in {postprocessingDir} ..")
-#             plot_rgb()
-
-
 def main():
     if not postprocessingEnabled:
         print("Postprocessing is disabled. Running to make the RTTOV profile files ..")
         make_inputdata()
     else:
         postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
-        global postprocessingDir
+        # global postprocessingDir
         postprocessingDir = filePrefix+"_"+postprocessing_directory_suffix
         rttov_output_dir = filePrefix+"_outputs"
         image_plot_enabled = namelist["postprocessing"]['image_plot_all_bands']
@@ -622,15 +564,15 @@ def main():
                 print("Exiting ..")
                 exit()
             print(f"Converting the RTTOV output within the ({rttov_output_dir}) directory to NetCDF files ..")
-            make_netcdf()
+            make_netcdf(postprocessingDir)
 
         if image_plot_enabled and os.path.isdir(postprocessingDir):
             print(f"Looking for the RTTOV NetCDF outputs in {postprocessingDir} ..")
-            plot_png()
+            plot_png(postprocessingDir)
 
         if rgb_plot_enabled and os.path.isdir(postprocessingDir):
             print(f"Looking for the RTTOV NetCDF outputs for brightness temperature in {postprocessingDir} ..")
-            plot_rgb()
+            plot_rgb(postprocessingDir)
 
 if __name__ == "__main__":
     main()
