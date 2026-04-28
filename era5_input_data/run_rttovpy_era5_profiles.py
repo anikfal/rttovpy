@@ -39,11 +39,6 @@ import yaml
 with open('namelist_era5.yaml', 'r') as yaml_file:
     namelist = yaml.safe_load(yaml_file)
 rttovVersion = namelist["rttov_version"]
-if (rttovVersion == 12 or rttovVersion == 13):
-    from modules import run_rttov12
-else:
-    from modules14plus import run_rttov14
-
 
 import sys
 if __name__ == "__main__":

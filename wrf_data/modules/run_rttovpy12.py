@@ -50,7 +50,7 @@ if not startDate <= observationTime <= endDate:
     print("Exiting ..")
     sys.exit()
 observationIndex000 = (observationTime - startDate)/ (60*int(minuteArr[1]))
-observationIndex = int(observationIndex000.total_seconds()) - 1  # seconds devided by seconds, so total_seconds represents the quotient.
+observationIndex = int(observationIndex000.total_seconds()) - 1
 satChannels000 = namelist["satellite_information"]["sat_channel_list"]
 satChannels = " ".join(str(item_value) for item_value in satChannels000)
 bandNames = namelist["satellite_information"]["sat_channel_names"]
@@ -69,13 +69,12 @@ def make_inputdata():
             print("Install it and run again.")
             print("Exiting ..")
             sys.exit()
-    from modules14plus import count_lines, application_shell
+    from modules import count_lines, application_shell
     from pyorbital.orbital import get_observer_look
     from pyorbital.orbital import Orbital
     from pyorbital.astronomy import get_alt_az
     from math import pi
     from wrf import getvar, disable_xarray
-    from modules14plus.p_stag import compute_p_stag
     disable_xarray()
 
     satIndex = namelist["satellite_information"]["sat_name_index"]
@@ -115,9 +114,9 @@ def make_inputdata():
     except Exception as error:
         print(f"An error occurred while creating {dirName}: {error}")
 
-    # orb = Orbital(satNameFile[satIndex])
-    # satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
-    satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
+    orb = Orbital(satNameFile[satIndex])
+    satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
+    # satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
     satAltitude = satPositions[2]
     if(angleEnable):
         print("Simulation with user defined satellite position:")
@@ -130,8 +129,8 @@ def make_inputdata():
     t2m = getvar(wrffile, "T2", timeidx=observationIndex)
     d2m = getvar(wrffile, "td2", timeidx=observationIndex)+273.15
     qv = getvar(wrffile, "QVAPOR", timeidx=observationIndex)
-    # p = getvar(wrffile, "p", timeidx=observationIndex)
-    # p2m = p[0,:,:]
+    p = getvar(wrffile, "p", timeidx=observationIndex)
+    p2m = p[0,:,:]
     u10 = getvar(wrffile, "U10", timeidx=observationIndex)
     v10 = getvar(wrffile, "V10", timeidx=observationIndex)
     skinT = getvar(wrffile, "TSK", timeidx=observationIndex)
@@ -145,7 +144,7 @@ def make_inputdata():
     tempLevel = getvar(wrffile, "tk", timeidx=observationIndex)
 
     varShape = qv.shape
-    pressureLevels = compute_p_stag(wrffile, observationIndex)
+    pressureLevels = p/100 #hpa
 
     profileCount = 1
     jjmax = varShape[1]
@@ -189,8 +188,7 @@ def make_inputdata():
                 ]
             for line in subHead:
                 file_append.write(line)
-            nlev = pressureLevels.shape[0]
-            levelRange = range(nlev)  # already TOA → surface
+            levelRange = list(range(varShape[0]))[::-1]
             for level in levelRange:
                 file_append.write(str(pressureLevels[level,jj,ii])+'\n')
 
@@ -201,7 +199,6 @@ def make_inputdata():
                 ]
             for line in subHead:
                 file_append.write(line)
-            levelRange = list(range(varShape[0]))[::-1]
             for level in levelRange:
                 # pointValue = tempLevel[tt,level,jj,ii]
                 pointValue = tempLevel[level,jj,ii]
@@ -223,12 +220,12 @@ def make_inputdata():
             subHead = [
                     "!\n",
                     "! Near-surface variables:\n"
-                    "!  2m T (K)    2m q (kg/kg)  10m wind u (m/s)  10m wind v (m/s)  wind fetch (m)\n"
+                    "!  2m T (K)    2m q (kg/kg) 2m p (hPa) 10m wind u (m/s)  10m wind v (m/s)  wind fetch (m)\n"
                     "!\n",
                 ]
             for line in subHead:
                 file_append.write(line)
-            near_surface_vars = [t2m[jj, ii], q2m[jj, ii],\
+            near_surface_vars = [t2m[jj, ii], q2m[jj, ii], p2m[jj, ii]/100,\
                                 u10[jj, ii], v10[jj, ii], 100000]
             near_surface_vars_2line = ' '.join(map(str, near_surface_vars))
             file_append.write(near_surface_vars_2line)
@@ -317,7 +314,7 @@ def make_inputdata():
         print("")
         print("==================================================================")
         print("Making the shellscript application for the RTTOV forward model ...")
-        application_shell.make_final_application_shell(rttovCoef, str(nlev), satChannels, str(len(satChannels000)), rttov_install_path, solar_radiation_simulation)
+        application_shell.make_final_application_shell(rttovCoef, str(varShape[0]), satChannels, str(len(satChannels000)), rttov_install_path, solar_radiation_simulation)
         print("The file run_wrf_example_fwd.sh has been made successfully.")
     else:
         aerosol_coefficient_file_path = namelist["wrfchem_dust_profiles"]['aerosol_coefficient_file_path']

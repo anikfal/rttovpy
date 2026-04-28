@@ -1,6 +1,8 @@
-rttov_installation_path: /home/anikfal/WRFDA/rttov12
-rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/rttov9pred54L/rtcoef_landsat_8_oli.dat
-solar_radiation_simulation: true  # Required for wavelengths less than 3 microns
+rttov_version: 14
+rttov_installation_path: /home/anikfal/WRFDA/rttov14
+rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov14/rtcoef_rttov14/rttov13pred54L/rtcoef_noaa_20_viirs_o3co2.dat
+solar_simulation: # in case of visible wavelengths, set to true to simulate the solar reflectance.
+  enabled: true
 wrf_file_path: /home/anikfal/postwrf/zkuwaitoutputs/wrfout_d01_2022-05-15_00_kuwaitfirst
 
 time_of_simulation:
@@ -24,6 +26,10 @@ satellite_information:
     enabled: true
     sat_latitude: 33
     sat_longitude: 41
+  historical_tle:
+    enabled: true  # Enable retrieval of historical TLE from Space-Track when observation time is not recent
+    space-track.org_username: username1234
+    space-track.org_password: password1234
 
 #================================================================================================================
 postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs.
@@ -37,7 +43,7 @@ postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs
     Blue: B7
 
 verification:
-  enabled: true
+  enabled: false
   verification_directory_suffix: rttov_outputs_verification
   satellite_file_path: /home/anikfal/extra_codes/msgseviri/msg/zdata/MSG1-SEVI-MSG15-0100-NA-20220516122742.057000000Z-NA.nat
   satellite_files_group: # if enabled, satellite_file_path would be skipped
