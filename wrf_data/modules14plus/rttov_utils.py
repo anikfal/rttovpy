@@ -54,6 +54,29 @@ def classify_channels(channel_wavenumbers):
         }
     return result
 
+def print_wrf_time_range(wrf_file):
+    import importlib, sys, os
+    required_modules = ["xarray"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            sys.exit()
+    import xarray as xr
+    ds = xr.open_dataset(wrf_file, engine='netcdf4')
+    times = [''.join(t.astype(str)) for t in ds['Times'].values]
+    print(f"Number of time steps in {os.path.basename(wrf_file)}: {len(times)}")
+    print(f"Start time : {times[0]}")
+    print(f"2nd time   : {times[1]}")
+    print(f"3rd time   : {times[2]}")
+    print("...")
+    print("...")
+    print(f"End time   : {times[-1]}")
+    ds.close()
+
 def requires_solar_for_channels(coef_file, selected_channels):
     channel_wavenumbers = parse_rttov_wavenumbers(coef_file)
     channel_info = classify_channels(channel_wavenumbers)

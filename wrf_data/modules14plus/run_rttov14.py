@@ -101,33 +101,6 @@ def make_inputdata():
             # Option 2 (strict mode)
             # raise RuntimeError("Solar channels selected but DO_SOLAR=0")
 
-    if os.path.exists(dirName) and os.path.isdir(dirName):
-        print("Using existing profile directory:", dirName)
-        profiles = [f for f in os.listdir(dirName) if f.startswith("prof-")]
-        if profiles:
-            pressureLevelsSize = count_lines.count_lines_between(
-                dirName + profiles[0],
-                "! Pressure levels (hPa)",
-                "! Temperature profile (K)"
-            ) - 2
-            # application_shell.make_final_application_shell(
-            #     rttovCoef,
-            #     str(pressureLevelsSize),
-            #     str(do_solar),
-            #     satChannels,
-            #     str(len(satChannels000)),
-            #     rttov_install_path
-            # )
-            application_shell.make_final_application_shell(
-                rttovCoef,
-                str(pressureLevelsSize),
-                satChannels,
-                str(len(satChannels000)),
-                rttov_install_path,
-                solar_radiation_simulation
-                )
-            return
-
     with open('modules14plus/satellite_celestrak_urls.yaml', 'r') as yaml_file:
         satCelestrakUrls = yaml.safe_load(yaml_file)
     satIndex = namelist["satellite_information"]["sat_name_index"]
@@ -150,9 +123,42 @@ def make_inputdata():
         profilesList000 = os.listdir(dirName)
         profilesList = [var for var in profilesList000 if (var.startswith("prof-") and var.endswith(".dat"))]
         pressureLevelsSize = count_lines.count_lines_between(dirName+profilesList[0], "! Pressure levels (hPa)", "! Temperature profile (K)") - 2
-        application_shell.make_final_application_shell(rttovCoef, str(pressureLevelsSize), satChannels, str(len(satChannels000)), rttov_install_path, solar_radiation_simulation)
-        print("- The file 'run_wrf_example_fwd.sh' has been made")
+        if not dust:
+            application_shell.make_final_application_shell(
+                rttovCoef,
+                str(pressureLevelsSize),
+                satChannels,
+                str(len(satChannels000)),
+                rttov_install_path,
+                solar_radiation_simulation
+                )
+            print("- The file 'run_wrf_example_fwd.sh' has been made successfully")
+        else:
+            aerosol_coefficient_file_path = namelist["wrfchem_dust_profiles"]['aerosol_coefficient_file_path']
+            if not os.path.exists(aerosol_coefficient_file_path):
+                print("Warning:", aerosol_coefficient_file_path, "is not a valid file path.")
+                print("Exiting ..")
+                exit()
+            make_dust_profile()
+            print("")
+            print("==================================================================")
+            print("Making the shellscript application for the RTTOV forward model ...")
+            application_shell.make_final_dust_application_shell(rttovCoef,
+                                                                # str(varShape[0]),
+                                                                str(pressureLevelsSize),
+                                                                satChannels,
+                                                                str(len(satChannels000)),
+                                                                rttov_install_path,
+                                                                aerosol_coefficient_file_path,
+                                                                solar_radiation_simulation
+                                                                )
+            print("The file run_wrfchem_dust_example_fwd.sh has been made successfully.")
         exit()
+
+    sat_name = satNameFile[satIndex]
+    sat_keyword = sat_name.split("-")[0].lower()
+    if sat_keyword not in rttovCoef.lower():
+        raise ValueError(f"sat_name_index = {satIndex} refers to {sat_keyword} which doesn't coordinate with the satellite name in rttov_coefficient_file_path. \nRevise the satellite name or the coefficient file path in the namelist.")
 
     try:
         pass
@@ -172,8 +178,7 @@ def make_inputdata():
     #     satellite_norad_ids = yaml.safe_load(yaml_file)
 
     tle_source_mode = choose_tle_source(observationTime, historicalTLE)
-    sat_name = satNameFile[satIndex]
-
+    
     try:
         if tle_source_mode == "celestrak":
             print(f"Using CelesTrak for {sat_name}")
@@ -408,10 +413,18 @@ def make_inputdata():
         print("")
         print("==================================================================")
         print("Making the shellscript application for the RTTOV forward model ...")
-        application_shell.make_final_application_shell(rttovCoef, str(nlev), satChannels, str(len(satChannels000)), rttov_install_path, solar_radiation_simulation)
+        application_shell.make_final_application_shell(rttovCoef,
+                                                       str(nlev),
+                                                       satChannels,
+                                                       str(len(satChannels000)),
+                                                       rttov_install_path,
+                                                       solar_radiation_simulation
+                                                       )
         print("The file run_wrf_example_fwd.sh has been made successfully.")
     else:
         aerosol_coefficient_file_path = namelist["wrfchem_dust_profiles"]['aerosol_coefficient_file_path']
+        if sat_keyword not in aerosol_coefficient_file_path.lower():
+            raise ValueError(f"sat_name_index = {satIndex} refers to {sat_keyword} which doesn't coordinate with the satellite name in aerosol_coefficient_file_path. \nRevise the satellite name or the coefficient file path in the namelist.")
         if not os.path.exists(aerosol_coefficient_file_path):
             print("Warning:", aerosol_coefficient_file_path, "is not a valid file path.")
             print("Exiting ..")
@@ -420,8 +433,15 @@ def make_inputdata():
         print("")
         print("==================================================================")
         print("Making the shellscript application for the RTTOV forward model ...")
-        application_shell.make_final_dust_application_shell(rttovCoef, str(varShape[0]), satChannels, str(len(satChannels000)), rttov_install_path, aerosol_coefficient_file_path, solar_radiation_simulation)
-        print("The file run_wrf_example_fwd.sh has been made successfully.")
+        application_shell.make_final_dust_application_shell(rttovCoef,
+                                                            str(nlev),
+                                                            satChannels,
+                                                            str(len(satChannels000)),
+                                                            rttov_install_path,
+                                                            aerosol_coefficient_file_path,
+                                                            solar_radiation_simulation
+                                                            )
+        print("The file run_wrfchem_dust_example_fwd.sh has been made successfully.")
 
 def make_dust_profile():
     # from modules import count_lines, application_shell
@@ -814,7 +834,7 @@ def verification():
     from pyresample.geometry import AreaDefinition
     from pyproj import CRS, Transformer
     # from xesmf.util import add_corners
-    from modules.satpy_readers import satpy_readers
+    from modules14plus.satpy_readers import satpy_readers
     sensor_id = namelist["verification"]['satellite_sensor_id']
     keepRemappedEnabled = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['enabled']
     groupSatFilesEnabled = namelist["verification"]['satellite_files_group']['enabled']

@@ -1,6 +1,6 @@
 import os
 def make_final_application_shell(rttovCoef, varShape, satChannels, satChannelCount, rttov_install_path, solar_onoff):
-    with open('modules/run_wrf_example_fwd.sh', 'r') as file:
+    with open('modules14plus/run_wrf_example_fwd.sh', 'r') as file:
         runScript = file.readlines()
     file.close()
     for index, line in enumerate(runScript):
@@ -27,7 +27,7 @@ def make_final_application_shell(rttovCoef, varShape, satChannels, satChannelCou
     rttovRunFile.close()
 
 def make_final_dust_application_shell(rttovCoef, varShape, satChannels, satChannelCount, rttov_install_path, aerosol_coeff_path, solar_onoff):
-    with open('modules/run_wrfchem_dust_example_fwd.sh', 'r') as file:
+    with open('modules14plus/run_wrfchem_dust_example_fwd.sh', 'r') as file:
         runScript = file.readlines()
     file.close()
     for index, line in enumerate(runScript):
