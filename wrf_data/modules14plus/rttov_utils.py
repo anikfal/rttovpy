@@ -1,0 +1,119 @@
+import re
+import numpy as np
+
+def parse_rttov_wavenumbers(coef_file):
+    """
+    Extract channel -> wavenumber mapping from RTTOV coef file.
+    Returns dict: {channel_number: wavenumber_cm-1}
+    """
+    channel_wavenumbers = {}
+    in_filter_block = False
+    with open(coef_file, "r") as f:
+        for line in f:
+            line = line.strip()
+            if "FILTER_FUNCTIONS" in line:
+                in_filter_block = True
+                continue
+            if in_filter_block:
+                if line.startswith("! ---") or line.startswith("FUNDAMENTAL_CONSTANTS"):
+                    break
+                if not line or line.startswith("!"):
+                    continue
+                parts = line.split()
+                if len(parts) >= 3:
+                    try:
+                        ch = int(parts[0])
+                        wavenumber = float(parts[2])
+                        channel_wavenumbers[ch] = wavenumber
+                    except:
+                        continue
+    return channel_wavenumbers
+
+def classify_channels(channel_wavenumbers):
+    """
+    Returns dict:
+    {
+        ch: {
+            "wavenumber": ...,
+            "wavelength_um": ...,
+            "requires_solar": True/False
+        }
+    }
+    """
+    result = {}
+    for ch, wn in channel_wavenumbers.items():
+        wavelength = 10000.0 / wn  # µm
+
+        # robust rule
+        requires_solar = wavelength < 4.0
+
+        result[ch] = {
+            "wavenumber": wn,
+            "wavelength_um": wavelength,
+            "requires_solar": requires_solar
+        }
+    return result
+
+def print_wrf_time_range(wrf_file):
+    import importlib, sys, os
+    required_modules = ["xarray"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            sys.exit()
+    import xarray as xr
+    ds = xr.open_dataset(wrf_file, engine='netcdf4')
+    times = [''.join(t.astype(str)) for t in ds['Times'].values]
+    print(f"Number of time steps in {os.path.basename(wrf_file)}: {len(times)}")
+    print(f"Start time : {times[0]}")
+    print(f"2nd time   : {times[1]}")
+    print(f"3rd time   : {times[2]}")
+    print("...")
+    print("...")
+    print(f"End time   : {times[-1]}")
+    ds.close()
+
+def print_wrf_domain_info(wrf_file):
+    import importlib, sys, os
+    for module in ["xarray"]:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            sys.exit()
+    import xarray as xr
+    ds = xr.open_dataset(wrf_file, engine='netcdf4')
+    lat = ds["XLAT"].isel(Time=0).values
+    lon = ds["XLONG"].isel(Time=0).values
+    lat_min, lat_max = float(lat.min()), float(lat.max())
+    lon_min, lon_max = float(lon.min()), float(lon.max())
+    lat_mid = (lat_min + lat_max) / 2
+    lon_mid = (lon_min + lon_max) / 2
+    print(f"WRF domain: {os.path.basename(wrf_file)}")
+    print(f"Latitude  range : {lat_min:.4f} to {lat_max:.4f} degrees")
+    print(f"Longitude range : {lon_min:.4f} to {lon_max:.4f} degrees")
+    print(f"Domain midpoint : ({lat_mid:.4f}, {lon_mid:.4f})")
+    ds.close()
+
+def requires_solar_for_channels(coef_file, selected_channels):
+    channel_wavenumbers = parse_rttov_wavenumbers(coef_file)
+    channel_info = classify_channels(channel_wavenumbers)
+    available_channels = set(channel_info.keys())
+    invalid_channels = [ch for ch in selected_channels if ch not in available_channels]
+    if invalid_channels:
+        ch_min = min(available_channels)
+        ch_max = max(available_channels)
+        raise ValueError(
+            f"\nInvalid channel(s): {invalid_channels}\n"
+            f"Available channel range: {ch_min} – {ch_max}\n"
+            f"Available channels: {sorted(available_channels)}"
+        )
+    solar_channels = [
+        ch for ch in selected_channels
+        if channel_info[ch]["requires_solar"]
+    ]
+    return len(solar_channels) > 0, solar_channels, channel_info

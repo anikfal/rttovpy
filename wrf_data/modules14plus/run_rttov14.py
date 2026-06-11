@@ -1,0 +1,991 @@
+## Module for extracting WRF model data,and making RTTOV profile data based on the extracted data,
+## As well as generating the shellscript for running the RTTOV model using the profile data
+## Author: Amirhossein Nikfal <https://github.com/anikfal>
+###############################################################################
+
+import importlib, sys
+required_modules = ["numpy", "yaml", "netCDF4", "pyorbital"]
+for module in required_modules:
+    try:
+        importlib.import_module(module)
+    except:
+        print("Warning: The Python module", module, "is not installed.")
+        print("Install it and run again.")
+        print("Exiting ..")
+        sys.exit()
+
+import yaml
+import os
+import netCDF4 as nc
+from datetime import datetime, timedelta, timezone
+import numpy as np
+with open('namelist_wrf.yaml', 'r') as yaml_file:
+    namelist = yaml.safe_load(yaml_file)
+postprocessingEnabled = namelist["postprocessing"]['enabled']
+dust = namelist["wrfchem_dust_profiles"]['enabled']
+satelliteVerificationEnabled = namelist["verification"]['enabled']
+wrfFilePath = namelist["wrf_file_path"]
+# solar_radiation_simulation = namelist["solar_radiation_simulation"]
+wrfFileName = os.path.basename(wrfFilePath)
+wrffile = nc.Dataset(wrfFilePath)
+minuteArr = wrffile.variables["XTIME"]
+startDate000 = wrffile.START_DATE
+startYear = int(startDate000.split("-")[0])
+startMonth = int(startDate000.split("-")[1])
+startDay = int(startDate000.split("-")[2][:2])
+startHour = int(startDate000.split("-")[2][3:5])
+startDate = datetime(startYear, startMonth, startDay, startHour, tzinfo=timezone.utc)
+endDate = startDate + timedelta(minutes=int(minuteArr[-1]))
+dirnameSuffix = namelist["rttov_inputdata_directory_suffix"]
+dirName = wrfFileName+"_"+dirnameSuffix+"/"
+historicalTLE = namelist["satellite_information"]["historical_tle"]['enabled']
+rttovCoef = namelist["rttov_coefficient_file_path"]
+rttov_install_path = namelist["rttov_installation_path"]
+if rttov_install_path.endswith('/'):
+    rttov_install_path = rttov_install_path[:-1]
+
+year = namelist["time_of_simulation"]["year"]
+month = namelist["time_of_simulation"]["month"]
+day = namelist["time_of_simulation"]["day"]
+hour = namelist["time_of_simulation"]["hour"]
+observationTime = datetime(year, month, day, hour, tzinfo=timezone.utc)
+if not startDate <= observationTime <= endDate:
+    print("!!!!!!!!!!!!!!!!!!!")
+    print(f"Warning: {observationTime} is not among the time-slots of {wrfFileName} (must be between {startDate} and {endDate}).")
+    print("Exiting ..")
+    sys.exit()
+observationIndex000 = (observationTime - startDate)/ (60*int(minuteArr[1]))
+observationIndex = int(observationIndex000.total_seconds()) - 1  # seconds devided by seconds, so total_seconds represents the quotient.
+satChannels000 = namelist["satellite_information"]["sat_channel_list"]
+satChannels = " ".join(str(item_value) for item_value in satChannels000)
+bandNames = namelist["satellite_information"]["sat_channel_names"]
+if len(satChannels000) != len(bandNames):
+    print("Warning: lengths of sat_channel_list and sat_channel_names are not equal.")
+    print("Exiting ..")
+    sys.exit()
+
+def make_inputdata():
+    required_modules = ["wrf"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            sys.exit()
+    from modules14plus import count_lines, application_shell, tle_fetcher
+    from pyorbital.orbital import get_observer_look
+    from pyorbital.orbital import Orbital
+    from pyorbital.astronomy import get_alt_az
+    from math import pi
+    from wrf import getvar, disable_xarray
+    from modules14plus.p_stag import compute_p_stag
+    from modules14plus.rttov_utils import requires_solar_for_channels
+    from modules14plus.choose_tle_source import choose_tle_source
+    disable_xarray()
+
+    # do_solar = int(namelist["solar_simulation"]['enabled'])
+    solar_radiation_simulation = namelist["solar_simulation"]['enabled']
+    # --- CHECK SOLAR REQUIREMENT ---
+    need_solar, solar_channels, channel_info = requires_solar_for_channels(
+        rttovCoef,
+        satChannels000
+    )
+    if need_solar:
+        print(f"Channels requiring solar: {solar_channels}")
+        if not solar_radiation_simulation:
+            print("WARNING: solar_simulation is disabled, but solar channels detected.")
+            solar_radiation_simulation = 1
+            print(" solar_simulation has been automatically set to true.")
+            # Option 2 (strict mode)
+            # raise RuntimeError("Solar channels selected but DO_SOLAR=0")
+
+    with open('modules14plus/satellite_celestrak_urls.yaml', 'r') as yaml_file:
+        satCelestrakUrls = yaml.safe_load(yaml_file)
+    satIndex = namelist["satellite_information"]["sat_name_index"]
+    if satIndex > 76:
+        print("Warning: Satellite name index must be between 1 to 76. Please look inside <satellite_names.yaml>.")
+        print("exiting ..")
+        exit()
+    angleEnable = namelist["satellite_information"]["user_defined_position"]['enabled']
+
+    with open('satellite_names.yaml', 'r') as yaml_file:
+        satNameFile = yaml.safe_load(yaml_file)
+
+    if not os.path.exists(wrfFilePath):
+        print("Warning:", wrfFilePath, "is not a valid file path.")
+        print("Exiting ..")
+        exit()
+
+    if os.path.isdir(dirName) and bool(os.listdir(dirName)):
+        print(f"- Using the previously created inupt data extracted from {wrfFileName}, stored in", dirName, "to make the final RTTOV shell application")
+        profilesList000 = os.listdir(dirName)
+        profilesList = [var for var in profilesList000 if (var.startswith("prof-") and var.endswith(".dat"))]
+        pressureLevelsSize = count_lines.count_lines_between(dirName+profilesList[0], "! Pressure levels (hPa)", "! Temperature profile (K)") - 2
+        if not dust:
+            application_shell.make_final_application_shell(
+                rttovCoef,
+                str(pressureLevelsSize),
+                satChannels,
+                str(len(satChannels000)),
+                rttov_install_path,
+                solar_radiation_simulation
+                )
+            print("- The file 'run_wrf_example_fwd.sh' has been made successfully")
+        else:
+            aerosol_coefficient_file_path = namelist["wrfchem_dust_profiles"]['aerosol_coefficient_file_path']
+            if not os.path.exists(aerosol_coefficient_file_path):
+                print("Warning:", aerosol_coefficient_file_path, "is not a valid file path.")
+                print("Exiting ..")
+                exit()
+            make_dust_profile()
+            print("")
+            print("==================================================================")
+            print("Making the shellscript application for the RTTOV forward model ...")
+            application_shell.make_final_dust_application_shell(rttovCoef,
+                                                                # str(varShape[0]),
+                                                                str(pressureLevelsSize),
+                                                                satChannels,
+                                                                str(len(satChannels000)),
+                                                                rttov_install_path,
+                                                                aerosol_coefficient_file_path,
+                                                                solar_radiation_simulation
+                                                                )
+            print("The file run_wrfchem_dust_example_fwd.sh has been made successfully.")
+        exit()
+
+    sat_name = satNameFile[satIndex]
+    sat_keyword = sat_name.split("-")[0].lower()
+    if sat_keyword not in rttovCoef.lower():
+        raise ValueError(f"sat_name_index = {satIndex} refers to {sat_keyword} which doesn't coordinate with the satellite name in rttov_coefficient_file_path. \nRevise the satellite name or the coefficient file path in the namelist.")
+
+    try:
+        pass
+        os.makedirs(dirName)
+        print(f"Directory {dirName} has been created to store profile datafiles.")
+    except Exception as error:
+        print(f"An error occurred while creating {dirName}: {error}")
+
+    # orb = Orbital(satNameFile[satIndex])
+    # satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
+    # satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
+    # if historicalTLE:
+    #     print("High precision satellite information enabled.")
+    # spacetrack_user = namelist["satellite_information"]["historical_tle"]["space-track.org_username"]
+    # spacetrack_password = namelist["satellite_information"]["historical_tle"]["space-track.org_password"]
+    # with open('modules14plus/satellite_to_norad_id.yaml', 'r') as yaml_file:
+    #     satellite_norad_ids = yaml.safe_load(yaml_file)
+
+    tle_source_mode = choose_tle_source(observationTime, historicalTLE)
+    
+    try:
+        if tle_source_mode == "celestrak":
+            print(f"Using CelesTrak for {sat_name}")
+            orb = tle_fetcher.get_tle_celestrak(
+                sat_name,
+                satCelestrakUrls[sat_name]
+            )
+        else:
+            print(f"Using Space-Track (historical) for {sat_name}")
+            try:
+                if historicalTLE:
+                    print("High precision satellite information enabled.")
+                spacetrack_user = namelist["satellite_information"]["historical_tle"]["space-track.org_username"]
+                spacetrack_password = namelist["satellite_information"]["historical_tle"]["space-track.org_password"]
+                with open('modules14plus/satellite_to_norad_id.yaml', 'r') as yaml_file:
+                    satellite_norad_ids = yaml.safe_load(yaml_file)
+                orb = tle_fetcher.get_tle_spacetrack_history(
+                    sat_name,
+                    satellite_norad_ids[sat_name],
+                    observationTime,
+                    spacetrack_user,
+                    spacetrack_password
+                )
+            except Exception as e:
+                print(f"WARNING: Space-Track failed ({e}), falling back to CelesTrak")
+                orb = tle_fetcher.get_tle_celestrak(
+                    sat_name,
+                    satCelestrakUrls[sat_name]
+                )
+
+        satPositions = orb.get_lonlatalt(observationTime)
+
+    except Exception as e:
+        raise RuntimeError(
+            f"FATAL: Failed to retrieve TLE and compute satellite position for {sat_name}: {e}"
+        )
+
+    satAltitude = satPositions[2]
+    if(angleEnable):
+        print("Simulation with user defined satellite position:")
+        satLat = namelist["satellite_information"]["user_defined_position"]['sat_latitude']
+        satLon = namelist["satellite_information"]["user_defined_position"]['sat_longitude']
+    else:
+        satLat = satPositions[1]
+        satLon = satPositions[0]
+
+    t2m = getvar(wrffile, "T2", timeidx=observationIndex)
+    # d2m = getvar(wrffile, "td2", timeidx=observationIndex)+273.15
+    qv = getvar(wrffile, "QVAPOR", timeidx=observationIndex)
+    u10 = getvar(wrffile, "U10", timeidx=observationIndex)
+    v10 = getvar(wrffile, "V10", timeidx=observationIndex)
+    skinT = getvar(wrffile, "TSK", timeidx=observationIndex)
+    lakeCover = getvar(wrffile, "LAKEMASK", timeidx=observationIndex)
+    modelheight = getvar(wrffile, "HGT", timeidx=observationIndex) #altitude
+    cloudFraction000 = getvar(wrffile, "cloudfrac", timeidx=observationIndex)
+    cloudFraction = np.maximum.reduce([cloudFraction000[0,:,:], cloudFraction000[1,:,:], cloudFraction000[2,:,:]]) #maximum values
+    q2m = qv[0,:,:]
+    lat = getvar(wrffile, "lat", timeidx=observationIndex)
+    lon = getvar(wrffile, "lon", timeidx=observationIndex)
+    tempLevel = getvar(wrffile, "tk", timeidx=observationIndex)
+
+    varShape = qv.shape
+    pressureLevels = compute_p_stag(wrffile, observationIndex)
+
+    profileCount = 1
+    jjmax = varShape[1]
+    iimax = varShape[2]
+    for jj in range(jjmax): #latitudesTemperature profile (K)
+        for ii in range(iimax): #longitude
+    # for jj in range(3): #latitudesTemperature profile (K)
+    #     for ii in range(2): #longitude
+            jjcount = jj+1
+            iicount = ii+1
+            print("Creating profile data for the grid point jj:", jjcount, "ii:", iicount)
+            profileIndexNaming = f"j and i = {jjcount}/{jjmax} and {iicount}/{iimax}"
+            profile_file = f"prof-{profileCount:06}.dat"
+            profileCount = profileCount + 1
+
+            with open(profile_file, "w") as file_writer:
+                header_lines = [
+                    f"! jj, ii, {jjcount}, {iicount}\n",
+                    f"! jjSize, iiSize, {jjmax}, {iimax}\n",
+                    "! Specify input profiles for example_fwd.F90.\n",
+                    "! Multiple profiles may be described: follow the same format for each one.\n",
+                    "! Comment lines (starting with '!') are optional.\n",
+                    "!\n",
+                    "! Gas units (must be same for all profiles)\n",
+                    "! 0 => ppmv over dry air\n",
+                    "! 1 => kg/kg over moist air\n",
+                    "! 2 => ppmv over moist air\n",
+                    "!\n",
+                    " 1\n",
+                    "!\n",
+                    ]
+                file_writer.writelines(header_lines)
+            file_append = open(profile_file, "a")
+            file_append.write("! --- Start of profile ---" + "\n")
+            file_append.write("! --- Grid point with " + profileIndexNaming + " ---" + "\n")
+
+            subHead = [
+                    "!\n",
+                    "! Pressure levels (hPa)\n"
+                    "!\n",
+                ]
+            for line in subHead:
+                file_append.write(line)
+            nlev = pressureLevels.shape[0]
+            levelRange = range(nlev)  # already TOA → surface
+            for level in levelRange:
+                file_append.write(str(pressureLevels[level,jj,ii])+'\n')
+
+            subHead = [
+                    "!\n",
+                    "! Temperature profile (K)\n"
+                    "!\n",
+                ]
+            for line in subHead:
+                file_append.write(line)
+            levelRange = list(range(varShape[0]))[::-1]
+            for level in levelRange:
+                # pointValue = tempLevel[tt,level,jj,ii]
+                pointValue = tempLevel[level,jj,ii]
+                file_append.write(str(pointValue)+'\n')
+            
+            subHead = [
+                    "!\n",
+                    "! Water vapour profile (kg/kg)\n"
+                    "!\n",
+                ]
+            for line in subHead:
+                file_append.write(line)
+            for level in levelRange:
+                pointValue = qv[level,jj,ii]
+                if pointValue < 0.00001:
+                    pointValue = np.float64(0.00001)
+                file_append.write(np.array2string(pointValue, formatter={'float_kind':lambda x: f"{x:.{5}f}"})+'\n')
+
+            subHead = [
+                    "!\n",
+                    "! Near-surface variables:\n"
+                    "!  2m T (K)    2m q (kg/kg)  10m wind u (m/s)  10m wind v (m/s)  wind fetch (m)\n"
+                    "!\n",
+                ]
+            for line in subHead:
+                file_append.write(line)
+            near_surface_vars = [t2m[jj, ii], q2m[jj, ii],\
+                                u10[jj, ii], v10[jj, ii], 100000]
+            near_surface_vars_2line = ' '.join(map(str, near_surface_vars))
+            file_append.write(near_surface_vars_2line)
+
+            subHead = [
+                    "\n!\n",
+                    "! Skin variables:\n"
+                    "!  Skin T (K)  Salinity   FASTEM parameters for land surfaces\n"
+                    "!\n",
+                ]
+            for line in subHead:
+                file_append.write(line)
+            skinVars = [skinT[jj, ii], 35.0, 3.0, 5.0, 15.0, 0.1, 0.3]
+            skinVars_2line = ' '.join(map(str, skinVars))
+            file_append.write(skinVars_2line)
+
+            subHead = [
+                    "\n!\n",
+                    "! Surface type (0=land, 1=sea, 2=sea-ice) and water type (0=fresh, 1=ocean)\n"
+                    "!\n",
+                ]
+            for line in subHead:
+                file_append.write(line)
+            surfaceType = [int(lakeCover[jj, ii]), 1]
+            surfaceType_2line = ' '.join(map(str, surfaceType))
+            file_append.write(surfaceType_2line)
+
+            subHead = [
+                    "\n!\n",
+                    "! Elevation (km), latitude and longitude (degrees)\n"
+                    "!\n",
+                ]
+            for line in subHead:
+                file_append.write(line)
+            # observerAltitude = np.round(modelheight[jj, ii]/9810, 4)
+            observerAltitude = modelheight[jj, ii]/1000
+            elevation = [observerAltitude, lat[jj, ii], lon[jj, ii]]
+            elevation_2line = ' '.join(map(str, elevation))
+            file_append.write(elevation_2line)
+
+            subHead = [
+                    "\n!\n",
+                    "! Sat. zenith and azimuth angles, solar zenith and azimuth angles (degrees)\n"
+                    "!\n",
+                ]
+            for line in subHead:
+                file_append.write(line)
+            userdefSatPos = get_observer_look(satLon, satLat, satAltitude, observationTime, np.array([lon[jj, ii]], dtype=np.float32), np.array([lat[jj, ii]], dtype=np.float32), np.array([observerAltitude], dtype=np.float32))
+            satAzimuth = userdefSatPos[0]
+            satZenith = 90 - userdefSatPos[1]
+            sunPositions = get_alt_az(observationTime, lon[jj, ii], lat[jj, ii])
+            sunZenith = sunPositions[0] * 180/pi
+            sunAzimuth = sunPositions[1] * 180/pi
+            satsunAngles = np.round([satZenith[0], satAzimuth[0], sunZenith, sunAzimuth], 2)
+            satsunAngles_2line = ' '.join(map(str, satsunAngles))
+            file_append.write(satsunAngles_2line)
+            subHead = [
+                    "\n!\n",
+                    "! Cloud top pressure (hPa) and cloud fraction for simple cloud scheme\n"
+                    "!\n",
+                ]
+            for line in subHead:
+                file_append.write(line)
+            cloudinfo = [500, cloudFraction[jj, ii]]
+            cloudinfo_2line = ' '.join(map(str, cloudinfo))
+            file_append.write(cloudinfo_2line)
+            
+            subHead = [
+                    "\n!\n",
+                    "! --- End of profile " + profileIndexNaming + " ---" + "\n"
+                    "!\n",
+                ]
+            for line in subHead:
+                file_append.write(line)
+            destination_path = os.path.join(dirName, os.path.basename(profile_file))
+            try:
+                os.rename(profile_file, destination_path)
+            except Exception as error:
+                print(f"An error occurred: {error}")
+                print("Exiting ..")
+                exit()
+
+            file_append.close()
+
+    if not dust:
+        print("")
+        print("==================================================================")
+        print("Making the shellscript application for the RTTOV forward model ...")
+        application_shell.make_final_application_shell(rttovCoef,
+                                                       str(nlev),
+                                                       satChannels,
+                                                       str(len(satChannels000)),
+                                                       rttov_install_path,
+                                                       solar_radiation_simulation
+                                                       )
+        print("The file run_wrf_example_fwd.sh has been made successfully.")
+    else:
+        aerosol_coefficient_file_path = namelist["wrfchem_dust_profiles"]['aerosol_coefficient_file_path']
+        if sat_keyword not in aerosol_coefficient_file_path.lower():
+            raise ValueError(f"sat_name_index = {satIndex} refers to {sat_keyword} which doesn't coordinate with the satellite name in aerosol_coefficient_file_path. \nRevise the satellite name or the coefficient file path in the namelist.")
+        if not os.path.exists(aerosol_coefficient_file_path):
+            print("Warning:", aerosol_coefficient_file_path, "is not a valid file path.")
+            print("Exiting ..")
+            exit()
+        make_dust_profile()
+        print("")
+        print("==================================================================")
+        print("Making the shellscript application for the RTTOV forward model ...")
+        application_shell.make_final_dust_application_shell(rttovCoef,
+                                                            str(nlev),
+                                                            satChannels,
+                                                            str(len(satChannels000)),
+                                                            rttov_install_path,
+                                                            aerosol_coefficient_file_path,
+                                                            solar_radiation_simulation
+                                                            )
+        print("The file run_wrfchem_dust_example_fwd.sh has been made successfully.")
+
+def make_dust_profile():
+    # from modules import count_lines, application_shell
+    from math import pi
+    from wrf import getvar, disable_xarray
+    disable_xarray()
+
+    try:
+        mineral_nuc = getvar(wrffile, "DUST_1", timeidx=observationIndex) * 1e-9
+        mineral_acc = (getvar(wrffile, "DUST_2", timeidx=observationIndex) + getvar(wrffile, "DUST_3", timeidx=observationIndex) + getvar(wrffile, "DUST_4", timeidx=observationIndex)) * 1e-9
+        mineral_coa = getvar(wrffile, "DUST_5", timeidx=observationIndex) * 1e-9
+        p = getvar(wrffile, "p", timeidx=observationIndex)
+
+    except:
+        print(f"Warning: There is no dust variabls (DUST_1, DUST_2, ..., DUST_5) within {wrfFilePath}")
+        print("This file is probably not a WRF/Chem output file.")
+        print("Exiting ..")
+        exit()
+
+    varShape = mineral_nuc.shape
+
+    profileCount = 1
+    jjmax = varShape[1]
+    iimax = varShape[2]
+    fillerNull = "0.000"
+    for jj in range(jjmax): #latitudesTemperature profile (K)
+        for ii in range(iimax): #longitude
+    # for jj in range(3): #latitudesTemperature profile (K)
+    #     for ii in range(2): #longitude
+            jjcount = jj+1
+            iicount = ii+1
+            print("Creating profile data for the grid point jj:", jjcount, "ii:", iicount)
+            profileIndexNaming = f"j and i = {jjcount}/{jjmax} and {iicount}/{iimax}"
+            profile_file = f"aer_prof-{profileCount:06}.dat"
+            profileCount = profileCount + 1
+
+            with open(profile_file, "w") as file_writer:
+                header_lines = [
+                    f"! jj, ii, {jjcount}, {iicount}\n",
+                    f"! jjSize, iiSize, {jjmax}, {iimax}\n",
+                    "! Specify input profiles for example_fwd.F90.\n",
+                    "!\n", 
+                    "! NB This file must contain data for the same number of profiles as prof.dat\n"
+                    "!\n"
+                    "! For each profile, the first value is an integer. If the value is 1-10\n"
+                    "! this indicates that a climatological aerosol profile generated by\n"
+                    "! rttov_aer_clim_prof should be used:\n"
+                    "!\n"
+                    "!         1  -->Continental clean\n"
+                    "!         2  -->Continental average\n"
+                    "!         3  -->Continental polluted\n"
+                    "!         4  -->Urban\n"
+                    "!         5  -->Desert\n"
+                    "!         6  -->Maritime clean\n"
+                    "!         7  -->Maritime polluted\n"
+                    "!         8  -->Maritime tropical\n"
+                    "!         9  -->Arctic\n"
+                    "!         10 -->Antarctic\n"
+                    "!\n"
+                    "! Any other value implies that input profiles for all 13 aerosol types\n"
+                    "! are provided here.\n"
+                    "!\n"
+                    "! Flag to indicate aerosol units (T => kg/kg; F => number density cm^-3):\n"
+                    "!\n"
+                    "  T\n"
+                    "!\n"
+                    ]
+                file_writer.writelines(header_lines)
+                file_append = open(profile_file, "a")
+                file_append.write("! --- Start of profile ---" + "\n")
+                file_append.write("! --- Grid point with " + profileIndexNaming + " ---" + "\n")
+                file_append.write("! Supply the number density profiles here" + "\n")
+                file_append.write("  0" + "\n")
+                file_append.write("!" + "\n")
+                file_append.write("! Dust concentration profiles (kg/kg) for each aerosol particle type (1-13) for each layer" + "\n")
+                file_append.write("!" + "\n")
+                file_append.write("!      INSO       WASO       SOOT       SSAM       SSCM       MINM       MIAM       MICM       MITR       SUSO       VOLA       VAPO       ASDU" + "\n")
+                file_append.write("!" + "\n")
+
+            levelRange = list(range(varShape[0]))[::-1]
+            for level in levelRange:
+                # row_value = ["      0.000", fillerNull, fillerNull, fillerNull, fillerNull, f"{mineral_nuc[level,jj,ii]:.3f}",
+                            #  f"{mineral_nuc[level,jj,ii]:.3f}", f"{mineral_nuc[level,jj,ii]:.3f}", fillerNull, fillerNull, fillerNull, fillerNull, fillerNull]
+                row_value = ["      0.000", fillerNull, fillerNull, fillerNull, fillerNull, str(mineral_nuc[level,jj,ii]),
+                             str(mineral_acc[level,jj,ii]), str(mineral_coa[level,jj,ii]), fillerNull, fillerNull, fillerNull, fillerNull, fillerNull]
+                row_value_str = "      ".join(row_value)
+                file_append.write(row_value_str+'\n')
+                destination_path = os.path.join(dirName, os.path.basename(profile_file))
+            try:
+                os.rename(profile_file, destination_path)
+            except Exception as error:
+                print(f"An error occurred: {error}")
+                print("Exiting ..")
+                exit()
+
+            file_append.close()
+
+import xarray as xr
+from glob import glob
+outputDirnameSuffix = namelist["rttov_outputdata_directory_suffix"]
+basedir = os.path.basename(wrfFilePath)
+outputDirPath = basedir+"_"+outputDirnameSuffix
+postprocessing_directory_suffix = namelist["postprocessing"]['postprocessing_directory_suffix']
+postprocessingDir = wrfFileName+"_"+postprocessing_directory_suffix
+def make_netcdf():
+    import re
+    wrffilexr = xr.open_dataset(wrfFilePath, engine='netcdf4', mode='r')
+    t2000 = wrffilexr.T2
+    t2 = t2000.isel(Time=observationIndex).squeeze()
+    xlat  = wrffilexr.XLAT.to_numpy()[0,:,:]
+    xlong = wrffilexr.XLONG.to_numpy()[0,:,:]
+
+    fillvalue = np.float32(-9999)
+    varshape = t2.shape
+    jjmax = varshape[0]
+    iimax = varshape[1]
+    allOutputs = glob(outputDirPath+"/output*")
+
+    fillerVar = t2000.to_numpy()[0,:,:]
+    fillerVar[:] = 0
+    
+    brightnessTemperature = xr.Dataset(
+        coords={
+            "lat": (["south_north", "west_east"], xlat),  # 2D latitude coordinates
+            "lon": (["south_north", "west_east"], xlong),  # 2D longitude coordinates
+        },
+        attrs={
+            "_FillValue": fillvalue,
+            "title": "brightness_temperature",
+            "projection": wrffilexr.attrs["MAP_PROJ_CHAR"],
+            "central_latitude": wrffilexr.attrs["CEN_LAT"],
+            "central_longitude": wrffilexr.attrs["CEN_LON"],
+            "standard_parallels": (wrffilexr.attrs["TRUELAT1"], wrffilexr.attrs["TRUELAT2"]),
+            },
+    )
+    for myband in bandNames:
+        brightnessTemperature[myband] = (["south_north", "west_east"], fillerVar.copy()) #copy is critical. Otherwise, all variables would be modified
+        brightnessTemperature[myband].attrs["units"] = "K"
+        brightnessTemperature[myband].attrs["long_name"] = "Calculated brightness temperature"
+        brightnessTemperature[myband].attrs["_FillValue"] = fillvalue
+
+    radiance = brightnessTemperature.copy(deep=True) #defining the variables coordinates, as well as filling them
+    radiance.attrs["title"] = "radiance"
+    overcastRadiance = brightnessTemperature.copy(deep=True)
+    overcastRadiance.attrs["title"] = "overcast_radiances"
+    transmittance = brightnessTemperature.copy(deep=True)
+    transmittance.attrs["title"] = "transmittance"
+    emissivity = brightnessTemperature.copy(deep=True)
+    emissivity.attrs["title"] = "emissivities"
+    for myband in bandNames: #modifying units and file titles
+        radiance[myband].attrs["units"] = "mW/m2/sr/cm-1"
+        radiance[myband].attrs["long_name"] = "Calculated radiance"
+        overcastRadiance[myband].attrs["units"] = ""
+        overcastRadiance[myband].attrs["long_name"] = "Calculated overcast radiances"
+        transmittance[myband].attrs["units"] = ""
+        transmittance[myband].attrs["long_name"] = "Calculated surface to space transmittance"
+        emissivity[myband].attrs["units"] = ""
+        emissivity[myband].attrs["long_name"] = "Calculated surface emissivities"
+    print("Extracting the RTTOV outputs and storing them in arrays ..")
+    for jj in range(jjmax): #latitudesTemperature profile (K)
+        for ii in range(iimax): #longitude
+            counter = jj*jjmax + ii
+            with open(allOutputs[counter], "r") as file:
+                first_line = file.readline()
+                if re.search("missing_value", first_line):
+                    for band in bandNames:
+                        brightnessTemperature[band][jj, ii] = fillvalue
+                        radiance[band][jj, ii] = fillvalue
+                        overcastRadiance[band][jj, ii] = fillvalue
+                        transmittance[band][jj, ii] = fillvalue
+                        emissivity[band][jj, ii] = fillvalue
+                else:
+                    found = False
+                    fileExtract = []
+                    lines = file.readlines()
+                    for line in lines:
+                        if "CHANNELS PROCESSED" in line:
+                            found = True
+                        if found:
+                            fileExtract.append(line.strip())
+                    for lineNumber, lineText in enumerate(fileExtract):
+                        if "BRIGHTNESS TEMPERATURES" in lineText:
+                            extractedLine = fileExtract[lineNumber + 1].strip()
+                            # print(extractedLine)
+                            for chIndex, simulationValue in enumerate(extractedLine.split()):
+                                # print("np.float32(simulationValue)", np.float32(simulationValue))
+                                brightnessTemperature[bandNames[chIndex]][jj, ii] = np.float32(simulationValue)
+                            continue
+                        if "CALCULATED RADIANCES" in lineText:
+                            extractedLine = fileExtract[lineNumber + 1].strip()
+                            for chIndex, simulationValue in enumerate(extractedLine.split()):
+                                radiance[bandNames[chIndex]][jj, ii] = np.float32(simulationValue)
+                            continue
+                        if "OVERCAST RADIANCES" in lineText:
+                            extractedLine = fileExtract[lineNumber + 1].strip()
+                            for chIndex, simulationValue in enumerate(extractedLine.split()):
+                                overcastRadiance[bandNames[chIndex]][jj, ii] = np.float32(simulationValue)
+                            continue
+                        if "SURFACE TO SPACE TRANSMITTANCE" in lineText:
+                            extractedLine = fileExtract[lineNumber + 1].strip()
+                            for chIndex, simulationValue in enumerate(extractedLine.split()):
+                                transmittance[bandNames[chIndex]][jj, ii] = np.float32(simulationValue)
+                            continue
+                        if "EMISSIVITIES" in lineText:
+                            extractedLine = fileExtract[lineNumber + 1].strip()
+                            for chIndex, simulationValue in enumerate(extractedLine.split()):
+                                emissivity[bandNames[chIndex]][jj, ii] = np.float32(simulationValue)
+
+    print("Storing extracted values in NetCDF files ..")
+    os.makedirs(postprocessingDir, exist_ok=True)
+    print("Storing", brightnessTemperature.title, "into NetCDF")
+    brightnessTemperature.to_netcdf(os.path.join(postprocessingDir, brightnessTemperature.title+".nc") )
+    print("Storing", radiance.title, "into NetCDF")
+    radiance.to_netcdf(os.path.join(postprocessingDir, radiance.title+".nc") )
+    print("Storing", overcastRadiance.title, "into NetCDF")
+    overcastRadiance.to_netcdf(os.path.join(postprocessingDir, overcastRadiance.title+".nc") )
+    print("Storing", transmittance.title, "into NetCDF")
+    transmittance.to_netcdf(os.path.join(postprocessingDir, transmittance.title+".nc") )
+    print("Storing", emissivity.title, "into NetCDF")
+    emissivity.to_netcdf(os.path.join(postprocessingDir, emissivity.title+".nc") )
+    print("Brightness temperature, Radiance, Overcast radiance, Surface to space transmittance," + \
+            "and emissivities have been stored in NetCDF files")
+
+def plot_png():
+    required_modules = ["matplotlib", "cartopy"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            exit()
+    import matplotlib.pyplot as plt
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+    for ncFile in glob(postprocessingDir+"/*.nc"):
+        ds = xr.open_dataset(ncFile)
+        lat = ds["lat"]
+        lon = ds["lon"]
+        projection = ds.attrs["projection"]
+        if "lambert" in projection.lower():
+            subplot_parameters = {"projection": ccrs.LambertConformal(central_longitude=ds.attrs["central_longitude"], 
+                        central_latitude=ds.attrs["central_latitude"], standard_parallels=ds.attrs["standard_parallels"],)}
+        elif "mercator" in projection.lower():
+            subplot_parameters = {"projection": ccrs.Mercator( central_longitude=ds.attrs["central_longitude"], 
+                        min_latitude=lat.min(), max_latitude=lat.max() )}
+        elif "polar" in projection.lower():
+            if lat.mean() > 0:
+                subplot_parameters = {"projection": ccrs.NorthPolarStereo( central_longitude=ds.attrs["central_longitude"] )}
+            else:
+                subplot_parameters = {"projection": ccrs.SouthPolarStereo( central_longitude=ds.attrs["central_longitude"] )}
+        else: #consider either as Lambert or Mercator
+            if lat.mean()>30 or lat.mean()<-30:
+                subplot_parameters = {"projection": ccrs.LambertConformal(central_longitude=ds.attrs["central_longitude"],
+                                    central_latitude=ds.attrs["central_latitude"])}
+            else:
+                subplot_parameters = {"projection": ccrs.Mercator( central_longitude=ds.attrs["central_longitude"], 
+                        min_latitude=lat.min(), max_latitude=lat.max() )}
+        for band in ds.data_vars.keys():
+            print("Plotting", band, "of", ncFile)
+            myvar = ds[band].copy(deep=True)
+            fig, ax = plt.subplots( subplot_kw=subplot_parameters, figsize=(8, 6) )
+            temp_plot = ax.pcolormesh(lon, lat, myvar, transform=ccrs.PlateCarree(), cmap="coolwarm")
+            ax.coastlines()
+            ax.add_feature(cfeature.BORDERS, linestyle=":")
+            gl = ax.gridlines(draw_labels=True, linestyle="-", alpha=1, color="black", linewidth=0.3)
+            gl.xlocator = plt.MaxNLocator(8)  # Customize the number of longitude lines
+            gl.ylocator = plt.MaxNLocator(6)  # Customize the number of latitude lines
+            gl.top_labels = True  # Show tick marks on the top
+            gl.right_labels = True  # Show tick marks on the right
+            gl.xlabel_style = {'size': 10, 'color': 'black'}  # Customize x-axis tick labels
+            gl.ylabel_style = {'size': 10, 'color': 'black'}  # Customize y-axis tick labels
+            # Optional: Customize graticule labels format (degrees and direction)
+            gl.xformatter = plt.FuncFormatter(lambda x, _: f"{x}°")
+            gl.yformatter = plt.FuncFormatter(lambda y, _: f"{y}°")
+            # cbar = plt.colorbar(temp_plot, ax=ax, orientation="vertical", label=myvar.attrs["units"])
+            plt.colorbar(temp_plot, ax=ax, orientation="vertical", label=myvar.attrs["units"])
+            ax.set_title(ds.attrs["title"] + " - " + band)
+            plt.savefig(postprocessingDir + "/" + ds.attrs["title"]+ "_" + band + ".png")
+
+def plot_rgb():
+    required_modules = ["matplotlib", "cartopy"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            exit()
+    import matplotlib.pyplot as plt
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+    import re
+    redPol = namelist["postprocessing"]['RGB_plot_brightness_temperature']['Red']
+    greenPol = namelist["postprocessing"]['RGB_plot_brightness_temperature']['Green']
+    bluePol = namelist["postprocessing"]['RGB_plot_brightness_temperature']['Blue']
+    redBands = set(re.findall(r'\b[a-zA-Z_]\w*\b', redPol))
+    greenBands = set(re.findall(r'\b[a-zA-Z_]\w*\b', greenPol))
+    blueBands = set(re.findall(r'\b[a-zA-Z_]\w*\b', bluePol))
+    ncFile = postprocessingDir+"/brightness_temperature.nc"
+    ds = xr.open_dataset(ncFile)
+    for band in redBands:
+        globals()[band] = ds[band].copy(deep=True)
+    redPolXarray = eval(redPol)
+    for band in greenBands:
+        globals()[band] = ds[band].copy(deep=True)
+    greenPolXarray = eval(greenPol)
+    for band in blueBands:
+        globals()[band] = ds[band].copy(deep=True)
+    bluePolXarray = eval(bluePol)
+    normalCoef = max([np.max(redPolXarray), np.max(greenPolXarray), np.max(bluePolXarray)])
+    rgb_image = np.stack([redPolXarray/normalCoef, greenPolXarray/normalCoef, bluePolXarray/normalCoef], axis=-1)
+    lat = ds["lat"]
+    lon = ds["lon"]
+    projection = ds.attrs["projection"]
+    if "lambert" in projection.lower():
+        subplot_parameters = {"projection": ccrs.LambertConformal(central_longitude=ds.attrs["central_longitude"], 
+                    central_latitude=ds.attrs["central_latitude"], standard_parallels=ds.attrs["standard_parallels"],)}
+    elif "mercator" in projection.lower():
+        subplot_parameters = {"projection": ccrs.Mercator( central_longitude=ds.attrs["central_longitude"], 
+                    min_latitude=lat.min(), max_latitude=lat.max() )}
+    elif "polar" in projection.lower():
+        if lat.mean() > 0:
+            subplot_parameters = {"projection": ccrs.NorthPolarStereo( central_longitude=ds.attrs["central_longitude"] )}
+        else:
+            subplot_parameters = {"projection": ccrs.SouthPolarStereo( central_longitude=ds.attrs["central_longitude"] )}
+    else: #consider either as Lambert or Mercator
+        if lat.mean()>30 or lat.mean()<-30:
+            subplot_parameters = {"projection": ccrs.LambertConformal(central_longitude=ds.attrs["central_longitude"],
+                                central_latitude=ds.attrs["central_latitude"])}
+        else:
+            subplot_parameters = {"projection": ccrs.Mercator( central_longitude=ds.attrs["central_longitude"], 
+                    min_latitude=lat.min(), max_latitude=lat.max() )}
+
+    print("Plotting RGB image of brightness_temperature ..")
+    fig, ax = plt.subplots( subplot_kw=subplot_parameters, figsize=(8, 6) )
+    temp_plot = ax.pcolormesh(lon, lat, rgb_image, transform=ccrs.PlateCarree(), cmap="coolwarm")
+    ax.coastlines()
+    ax.add_feature(cfeature.BORDERS, linestyle=":")
+    gl = ax.gridlines(draw_labels=True, linestyle="-", alpha=1, color="black", linewidth=0.3)
+    gl.xlocator = plt.MaxNLocator(8)  # Customize the number of longitude lines
+    gl.ylocator = plt.MaxNLocator(6)  # Customize the number of latitude lines
+    gl.top_labels = True  # Show tick marks on the top
+    gl.right_labels = True  # Show tick marks on the right
+    gl.xlabel_style = {'size': 10, 'color': 'black'}  # Customize x-axis tick labels
+    gl.ylabel_style = {'size': 10, 'color': 'black'}  # Customize y-axis tick labels
+    # Optional: Customize graticule labels format (degrees and direction)
+    gl.xformatter = plt.FuncFormatter(lambda x, _: f"{x}°")
+    gl.yformatter = plt.FuncFormatter(lambda y, _: f"{y}°")
+    # cbar = plt.colorbar(temp_plot, ax=ax, orientation="vertical", label=myvar.attrs["units"])
+    plt.colorbar(temp_plot, ax=ax, orientation="vertical", label=globals()[band].attrs["units"])
+    plt.title("RGB Image from Brightness Temperatures")
+    plt.axis("off")
+    plt.savefig(postprocessingDir + "/" + "brightness_temperature_rgb.png")
+
+def run_postprocessing():
+    image_plot_enabled = namelist["postprocessing"]['image_plot_all_bands']
+    rgb_plot_enabled = namelist["postprocessing"]['RGB_plot_brightness_temperature']['enabled']
+    print("Postprocessing ...")
+    if not os.path.isdir(outputDirPath):
+        print(f"Warning: The postprocessing directory ({postprocessingDir}) and RTTOV outputs are not availabe.")
+        print("Disable postprocessing and run to make the profile files.")
+        print("Exiting ..")
+        exit()
+    print(f"Converting the RTTOV output within the ({postprocessingDir}) directory to NetCDF files ..")
+    make_netcdf()
+    if image_plot_enabled:
+        if os.path.isdir(postprocessingDir):
+            print(f"Looking for the RTTOV NetCDF outputs in {postprocessingDir} ..")
+            plot_png()
+    if rgb_plot_enabled:
+        if os.path.isdir(postprocessingDir):
+            print(f"Looking for the RTTOV NetCDF outputs for brightness temperature in {postprocessingDir} ..")
+            plot_rgb()
+
+def verification():
+    required_modules = ["satpy", "xesmf", "pyresample", "pyproj"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            sys.exit()
+    from satpy import Scene
+    import xesmf as xe
+    from pyresample.geometry import AreaDefinition
+    from pyproj import CRS, Transformer
+    # from xesmf.util import add_corners
+    from modules14plus.satpy_readers import satpy_readers
+    sensor_id = namelist["verification"]['satellite_sensor_id']
+    keepRemappedEnabled = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['enabled']
+    groupSatFilesEnabled = namelist["verification"]['satellite_files_group']['enabled']
+    verification_directory_suffix = namelist["verification"]['verification_directory_suffix']
+    verificationDir = wrfFileName+"_"+verification_directory_suffix
+    wrf = xr.open_dataset(wrfFilePath)
+    if groupSatFilesEnabled:
+        print("Loading the satellite files in the group directory ..")
+        groupSatFilesDir = namelist["verification"]['satellite_files_group']['satellite_file_directory']
+        all_scenes0 = Scene(reader=satpy_readers.get(sensor_id), filenames=glob(os.path.join(groupSatFilesDir, '*')))
+    else:
+        print("Loading single satellite file ..")
+        satelliteDataPath = namelist["verification"]['satellite_file_path']
+        all_scenes0 = Scene(reader=satpy_readers.get(sensor_id), filenames=[satelliteDataPath])
+
+    available = all_scenes0.available_dataset_names()
+    missing = [b for b in bandNames if b not in available]
+    if missing:
+        raise ValueError(f"Channel(s) {missing} not found in the available datsets in the satellite datafile.\nAvailable datasets: {available}")
+
+    # all_scenes.load([all_scenes.all_dataset_names()[ii-1] for ii in satChannels000], calibration='radiance')
+    all_scenes0.load(bandNames, calibration='radiance')
+    firstdata = all_scenes0[all_scenes0.available_dataset_names()[0]]
+    upscale_ratio = (wrffile.DX / firstdata.resolution) #/ 2
+    import warnings
+    warnings.filterwarnings(
+        "ignore",
+        category=UserWarning,
+        message=".*important projection information.*"
+    )
+    #area = firstdata.attrs['area'].compute_optimal_bb_area()
+    #new_scn = all_scenes0.resample(area)
+    #proj_source_dictionary = new_scn["M12"].attrs['area'].crs.to_dict()
+    proj_source_dictionary = firstdata.attrs['area'].crs.to_dict()
+    # proj_source_dictionary = firstdata.attrs['area'].proj_dict
+    proj_source = CRS.from_user_input(proj_source_dictionary)
+    proj_target = CRS.from_epsg(4326) # Define target CRS (WGS84 lat/lon)
+    transformer = Transformer.from_crs(proj_source, proj_target, always_xy=True)  # Build transformer
+
+    # Example: convert a point in UTM 38N to lat/lon
+    x, y = 600000, 4300000
+    lon, lat = transformer.transform(x, y)
+
+    # new_area = AreaDefinition(area_id=atts.area_id,
+    #                         description=atts.description,
+    #                         proj_id=atts.proj_id,
+    #                         projection=atts.proj_dict,
+    #                         width=int(atts.width/upscale_ratio),
+    #                         height=int(atts.height/upscale_ratio),
+    #                         area_extent=atts.area_extent)
+    # exit()
+    new_area = AreaDefinition(area_id="latlon_geo",
+                            description="upscaled data",
+                            proj_id="any_id",
+                            projection={'proj': 'longlat', 'datum': 'WGS84'},
+                            width=int(firstdata.x.size / upscale_ratio),
+                            height=int(firstdata.y.size / upscale_ratio),
+                            area_extent=[wrf.XLONG.min().item(), wrf.XLAT.min().item(), wrf.XLONG.max().item(), wrf.XLAT.max().item()])
+                            # area_extent=[40, 20, 65, 40])  #(ll_x, lower_left_y, ur_x, upper_right_y)
+
+    all_scenes = all_scenes0.resample(new_area)
+    scnArea = all_scenes[all_scenes._datasets.keys()[0].get("name")].attrs["area"]
+    lons, lats = scnArea.get_lonlats()
+    lons = np.where(np.isinf(lons), np.nan, lons)
+    lats = np.where(np.isinf(lats), np.nan, lats)
+    lat_wrf = wrf['XLAT'].isel(Time=0)
+    lon_wrf = wrf['XLONG'].isel(Time=0)
+    source_grid = xr.Dataset({'lat': (['y', 'x'], lats), 'lon': (['y', 'x'], lons)})
+    # source_grid = add_corners(source_grid)
+    target_grid = xr.Dataset({'lat': lat_wrf, 'lon': lon_wrf})
+    print("Regridding between the satellite and the WRF data.")
+    print("Can take a few minutes. Please wait ..")
+    regridder = xe.Regridder(source_grid, target_grid, method='bilinear') # mass conservative method for radiance as a flux
+    radiance_file = glob(os.path.join(postprocessingDir, "radiance*.nc"))
+    if radiance_file:
+        radiance_netcdf = xr.open_dataset(radiance_file[0])
+    else:
+        print("No radiance NetCDF file found in", postprocessingDir)
+        pirnt("Exiting ..")
+        exit()
+    bandName_iter = iter(bandNames)
+    std_list = []
+    rmse_list = []
+    cor_list = []
+    if not os.path.exists(verificationDir):
+        os.makedirs(verificationDir, exist_ok=True)
+    for scn in all_scenes:
+        print("Verification processing on the satellite", scn.attrs["platform_name"], "- band", scn.attrs["name"])
+        scn_regridded_to_wrf = regridder(scn)
+        if keepRemappedEnabled:
+            remappedFileName = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['remapped_file_name']
+            band_name = scn.attrs["name"]
+            print("Remapping satellite data on the WRF grid structure ..")
+            scn_regridded_to_wrf.to_dataset(name=band_name).drop_vars("crs").to_netcdf(os.path.join(verificationDir, remappedFileName + "_" + band_name + ".nc"))
+        bandFromRadiation_xarray = radiance_netcdf[next(bandName_iter)]
+        for key in ["units", "sensor", "name", "standard_name", "platform_name"]:
+            value = scn.attrs.get(key)
+            scn_regridded_to_wrf.attrs[key] = str(value) if key == "wavelength" else value
+        scn_regridded_to_wrf_ref = scn_regridded_to_wrf.values.flatten()
+        bandFromWRFRadiation_xarray_ref = bandFromRadiation_xarray.values.flatten()
+        mask = ~np.isnan(scn_regridded_to_wrf_ref) & ~np.isnan(bandFromWRFRadiation_xarray_ref)
+        scn_regridded_to_wrf_ref = scn_regridded_to_wrf_ref[mask]
+        bandFromWRFRadiation_xarray_ref = bandFromWRFRadiation_xarray_ref[mask]
+        std_list.append(np.std(bandFromWRFRadiation_xarray_ref)/np.std(scn_regridded_to_wrf_ref))
+        rmse_list.append( (np.sqrt(np.mean((bandFromWRFRadiation_xarray_ref - scn_regridded_to_wrf_ref) ** 2))) / np.mean(bandFromWRFRadiation_xarray_ref) )
+        cor_list.append(np.corrcoef(scn_regridded_to_wrf_ref, bandFromWRFRadiation_xarray_ref)[0, 1])
+
+    required_modules = ["matplotlib.pyplot", "geocat.viz"]
+    for module in required_modules:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            print("Install it and run again.")
+            print("Exiting ..")
+            sys.exit()
+    import matplotlib.pyplot as plt
+    import geocat.viz as gv
+    taylor_filename = namelist["verification"]['taylor_diagram_name']
+    # Create figure and TaylorDiagram instance
+    fig = plt.figure(figsize=(10, 10))
+    dia = gv.TaylorDiagram(fig=fig, label='REF')
+    # Add models to Taylor diagram
+    dia.add_model_set(std_list, cor_list, color='red', marker='o', label='Radiation', fontsize=16)
+    dia.add_model_name(bandNames, fontsize=16)
+    dia.add_contours(levels=np.arange(0, 1.1, 0.25), colors='lightgrey', linewidths=0.5)
+    dia.add_legend(fontsize=16)
+    print("Storing extracted values in NetCDF files ..")
+    plt.savefig( os.path.join(verificationDir, taylor_filename+".png"))
+
+    wholeStatistics = [std_list, rmse_list, cor_list]
+    rownames = ["CV", "RMSE", "Correlation"]
+    col_width = max(len(h) for h in bandNames) + 2
+    rowname_width = max(len(r) for r in rownames) + 2
+    header = f"{'':<{rowname_width}}" + " ".join(f"{h:<{col_width}}" for h in bandNames)
+    rows = [
+        f"{rowname:<{rowname_width}}" + " ".join(f"{val:.3f}".ljust(col_width) for val in row)
+        for rowname, row in zip(rownames, wholeStatistics)
+    ]
+    table_str = "\n".join([header] + rows)
+    with open(os.path.join(verificationDir, taylor_filename+"_table.txt"), "w") as f:
+        f.write(table_str)
+
+def main():
+    if satelliteVerificationEnabled:
+        verification()
+        sys.exit()
+    if postprocessingEnabled:
+        run_postprocessing()
+    else:
+        make_inputdata()
+
+if __name__ == "__main__":
+    main()

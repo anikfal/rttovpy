@@ -61,3 +61,4 @@
 59: JPSS VIIRS Level 1b data in netCDF4 format
 60: SNPP VIIRS Level 2 data in netCDF4 format
 61: VIIRS Global Area Coverage from VIIRS Reflected Solar Band and Thermal Emission Band data for both Moserate resolution and Imager resolution channels.
+62: JPSS VIIRS data in HDF5 SDR format

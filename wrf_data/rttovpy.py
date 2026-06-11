@@ -1,5 +1,5 @@
-## Code for downloading ERA5 data,and making RTTOV profile data based on the downloaded data,
-## As well as generating the shellscript for running the RTTOV model using the profile data
+## Code for reading a WRF model output,and making RTTOV profile data based on the output data,
+## as well as generating the shellscript for running the RTTOV model using the profile data.
 ## Author: Amirhossein Nikfal <https://github.com/anikfal>
 ###############################################################################
 import argparse
@@ -12,8 +12,26 @@ def parse_args():
         type=str,
         help="Path to RTTOV coefficient file"
     )
+    parser.add_argument(
+        "--wrftime",
+        type=str,
+        help="Path to WRF output file to inspect its time range"
+    )
+    parser.add_argument(
+        "--wrfdomain",
+        type=str,
+        help="Path to WRF output file to print its domain lat/lon range and midpoint"
+    )
     return parser.parse_args()
 args = parse_args()
+if args.wrfdomain:
+    from modules14plus.rttov_utils import print_wrf_domain_info
+    print_wrf_domain_info(args.wrfdomain)
+    exit(0)
+if args.wrftime:
+    from modules14plus.rttov_utils import print_wrf_time_range
+    print_wrf_time_range(args.wrftime)
+    exit(0)
 if args.wavelength:
     from modules14plus.rttov_utils import parse_rttov_wavenumbers, classify_channels
     wn_map = parse_rttov_wavenumbers(args.wavelength)
@@ -36,14 +54,9 @@ for module in required_modules:
         print("Exiting ..")
         exit()
 import yaml
-with open('namelist_era5.yaml', 'r') as yaml_file:
+with open('namelist_wrf.yaml', 'r') as yaml_file:
     namelist = yaml.safe_load(yaml_file)
 rttovVersion = namelist["rttov_version"]
-if (rttovVersion == 12 or rttovVersion == 13):
-    from modules import run_rttov12
-else:
-    from modules14plus import run_rttov14
-
 
 import sys
 if __name__ == "__main__":
