@@ -8,4 +8,4 @@ satpy_readers = { 1:"abi_l1b", 2:"abi_l1b_scmi", 3:"abi_l2_nc", 4:"acspo", 5:"ah
                      39:"multiple_sensors_isccpng_l1g_nc", 40:"mviri_l1b_fiduceo_nc", 41:"mws_l1b_nc", 42:"nucaps", 43:"nwcsaf-pps_nc",
                      44:"oceancolorcci_l3_nc", 45:"olci_l1b", 46:"olci_l2", 47:"oli_tirs_l1_tif", 48:"osisaf_nc", 49:"pace_oci_l1b_nc",
                      50:"safe_sar_l2_ocn", 51:"satpy_cf_nc", 52:"seviri_l1b_hrit", 53:"seviri_l1b_native", 54:"seviri_l1b_nc",
-                     55:"slstr_l1b", 56:"smos_l2_wind", 57:"tropomi_l2", 58:"viirs_edr", 59:"viirs_l1b", 60:"viirs_l2", 61:"viirs_vgac_l1c_nc"}
+                     55:"slstr_l1b", 56:"smos_l2_wind", 57:"tropomi_l2", 58:"viirs_edr", 59:"viirs_l1b", 60:"viirs_l2", 61:"viirs_vgac_l1c_nc", 62:"viirs_sdr"}

@@ -17,8 +17,17 @@ def parse_args():
         type=str,
         help="Path to WRF output file to inspect its time range"
     )
+    parser.add_argument(
+        "--wrfdomain",
+        type=str,
+        help="Path to WRF output file to print its domain lat/lon range and midpoint"
+    )
     return parser.parse_args()
 args = parse_args()
+if args.wrfdomain:
+    from modules14plus.rttov_utils import print_wrf_domain_info
+    print_wrf_domain_info(args.wrfdomain)
+    exit(0)
 if args.wrftime:
     from modules14plus.rttov_utils import print_wrf_time_range
     print_wrf_time_range(args.wrftime)

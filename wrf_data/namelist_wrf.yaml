@@ -1,40 +1,41 @@
 rttov_version: 14
 rttov_installation_path: /home/anikfal/WRFDA/rttov14
 rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov14/rtcoef_rttov14/rttov13pred54L/rtcoef_noaa_20_viirs_o3co2.dat
-solar_simulation: # in case of visible wavelengths, set to true to simulate the solar reflectance.
+solar_simulation: # In case of visible wavelengths, set to true to simulate the solar reflectance.
   enabled: true
-wrf_file_path: /home/anikfal/postwrf/zkuwaitoutputs/wrfout_d01_2022-05-15_00_kuwaitfirst
+wrf_file_path: /home/anikfal/WRFTEST/WRF/test/em_real/wrfout_d01_2022-03-13_00:00:00
 
 time_of_simulation:
   year: 2022
-  month: 5
-  day: 16
+  month: 3
+  day: 13
   hour: 12
 
-rttov_inputdata_directory_suffix: rttov_inputs  #Directory suffix, appending to the WRF filename. No need to be changed.
-rttov_outputdata_directory_suffix: rttov_outputs #Default directory suffix. No need to be changed.
+rttov_inputdata_directory_suffix: inputs222   # Directory suffix, appending to the WRF filename. No need to be changed.
+rttov_outputdata_directory_suffix: outputs222  # Default directory suffix. No need to be changed.
 
-wrfchem_dust_profiles:
+wrfchem_dust_profiles:  # Optional, in case of including dust radiative transfer effects from the WRF/Chem outputs
   enabled: false
-  aerosol_coefficient_file_path: /home/anikfal/WRFDA/rttov12/rtcoef_rttov12/cldaer_ir/scaercoef_eos_2_modis.dat
+  aerosol_coefficient_file_path: /home/anikfal/WRFDA/rttov14/rtcoef_rttov14/aertable_visir/rttov_aertable_noaa_20_viirs_opac.dat
 
 satellite_information:
-  sat_name_index: 4 #1
-  sat_channel_list: [5, 6] #[4, 6, 7]
-  sat_channel_names: [B5, B6]  # The exact corresponding band name(s) in the satellite data are required
+  sat_name_index: 53  # Check out satellite_names.yaml and pick the corresponding satellite index
+  sat_channel_list: [17, 18, 19]
+  sat_channel_names: [M122, M13, M14]  # The exact corresponding band name(s) in the satellite data are required
   user_defined_position:
     enabled: true
     sat_latitude: 33
-    sat_longitude: 41
+    sat_longitude: 51
   historical_tle:
     enabled: true  # Enable retrieval of historical TLE from Space-Track when observation time is not recent
-    space-track.org_username: username1234
-    space-track.org_password: password1234
+    space-track.org_username: your_username
+    space-track.org_password: your_password
+
 
 #================================================================================================================
-postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs.
+postprocessing:  # Enable (=true) to make NetCDF and plots from the RTTOV outputs.
   enabled: false
-  postprocessing_directory_suffix: rttov_outputs_postprocessing #Default directory suffix. No need to be changed.
+  postprocessing_directory_suffix: rttov_outputs_postprocessing  # Default directory suffix. No need to be changed.
   image_plot_all_bands: true
   RGB_plot_brightness_temperature:
     enabled: false
@@ -44,13 +45,13 @@ postprocessing:  #Enable (=true) to make NetCDF and plots from the RTTOV outputs
 
 verification:
   enabled: false
-  verification_directory_suffix: rttov_outputs_verification
-  satellite_file_path: /home/anikfal/extra_codes/msgseviri/msg/zdata/MSG1-SEVI-MSG15-0100-NA-20220516122742.057000000Z-NA.nat
-  satellite_files_group: # if enabled, satellite_file_path would be skipped
+  verification_directory_suffix: viirs_verification
+  satellite_file_path: /home/anikfal/training/data/viirs/20220314/GMODO-SVM12-SVM13-SVM14_j01_d20220314_t0831484_e0837302_b22374_c20260608024612250864_oeac_ops.h5
+  satellite_files_group: # If enabled, satellite_file_path would be skipped
     enabled: true
-    satellite_file_directory: /home/anikfal/training/data/samplelandsat
-  satellite_sensor_id: 47 #53
+    satellite_file_directory: /home/anikfal/training/data/viirs/20220314
+  satellite_sensor_id: 62  # Check out satellite_sensors_id.yaml and pick the corresponding sensor index
   taylor_diagram_name: radiation_taylor_diagram_landsat
   keep_remapped_satellite_to_wrf_data:  # Keep the NetCDF data of the remapped satellite data to the WRF grid structure
     enabled: true
-    remapped_file_name: landsat_to_wrf #msg_to_wrf
+    remapped_file_name: viirs_to_wrf

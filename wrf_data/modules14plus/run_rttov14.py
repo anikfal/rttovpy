@@ -842,11 +842,18 @@ def verification():
     verificationDir = wrfFileName+"_"+verification_directory_suffix
     wrf = xr.open_dataset(wrfFilePath)
     if groupSatFilesEnabled:
+        print("Loading the satellite files in the group directory ..")
         groupSatFilesDir = namelist["verification"]['satellite_files_group']['satellite_file_directory']
         all_scenes0 = Scene(reader=satpy_readers.get(sensor_id), filenames=glob(os.path.join(groupSatFilesDir, '*')))
     else:
+        print("Loading single satellite file ..")
         satelliteDataPath = namelist["verification"]['satellite_file_path']
         all_scenes0 = Scene(reader=satpy_readers.get(sensor_id), filenames=[satelliteDataPath])
+
+    available = all_scenes0.available_dataset_names()
+    missing = [b for b in bandNames if b not in available]
+    if missing:
+        raise ValueError(f"Channel(s) {missing} not found in the available datsets in the satellite datafile.\nAvailable datasets: {available}")
 
     # all_scenes.load([all_scenes.all_dataset_names()[ii-1] for ii in satChannels000], calibration='radiance')
     all_scenes0.load(bandNames, calibration='radiance')
@@ -858,7 +865,11 @@ def verification():
         category=UserWarning,
         message=".*important projection information.*"
     )
-    proj_source_dictionary = firstdata.attrs['area'].proj_dict
+    #area = firstdata.attrs['area'].compute_optimal_bb_area()
+    #new_scn = all_scenes0.resample(area)
+    #proj_source_dictionary = new_scn["M12"].attrs['area'].crs.to_dict()
+    proj_source_dictionary = firstdata.attrs['area'].crs.to_dict()
+    # proj_source_dictionary = firstdata.attrs['area'].proj_dict
     proj_source = CRS.from_user_input(proj_source_dictionary)
     proj_target = CRS.from_epsg(4326) # Define target CRS (WGS84 lat/lon)
     transformer = Transformer.from_crs(proj_source, proj_target, always_xy=True)  # Build transformer
@@ -875,17 +886,14 @@ def verification():
     #                         height=int(atts.height/upscale_ratio),
     #                         area_extent=atts.area_extent)
     # exit()
-    # new_area = AreaDefinition(area_id="latlon_geo",
-    #                         description="upscaled data",
-    #                         proj_id="any_id",
-    #                         projection={'proj': 'longlat', 'datum': 'WGS84'},
-    #                         width=int(firstdata.x.size / upscale_ratio),
-    #                         height=int(firstdata.y.size / upscale_ratio),
-    #                         area_extent=[wrf.XLONG.min().item(), wrf.XLAT.min().item(), wrf.XLONG.max().item(), wrf.XLAT.max().item()])
-    #                         # area_extent=[40, 20, 65, 40])  #(ll_x, lower_left_y, ur_x, upper_right_y)
-    print(lon, lat)
-    print("---------------------------------------------")
-    exit()
+    new_area = AreaDefinition(area_id="latlon_geo",
+                            description="upscaled data",
+                            proj_id="any_id",
+                            projection={'proj': 'longlat', 'datum': 'WGS84'},
+                            width=int(firstdata.x.size / upscale_ratio),
+                            height=int(firstdata.y.size / upscale_ratio),
+                            area_extent=[wrf.XLONG.min().item(), wrf.XLAT.min().item(), wrf.XLONG.max().item(), wrf.XLAT.max().item()])
+                            # area_extent=[40, 20, 65, 40])  #(ll_x, lower_left_y, ur_x, upper_right_y)
 
     all_scenes = all_scenes0.resample(new_area)
     scnArea = all_scenes[all_scenes._datasets.keys()[0].get("name")].attrs["area"]

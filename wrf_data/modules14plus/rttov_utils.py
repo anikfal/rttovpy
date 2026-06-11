@@ -77,6 +77,28 @@ def print_wrf_time_range(wrf_file):
     print(f"End time   : {times[-1]}")
     ds.close()
 
+def print_wrf_domain_info(wrf_file):
+    import importlib, sys, os
+    for module in ["xarray"]:
+        try:
+            importlib.import_module(module)
+        except:
+            print("Warning: The Python module", module, "is not installed.")
+            sys.exit()
+    import xarray as xr
+    ds = xr.open_dataset(wrf_file, engine='netcdf4')
+    lat = ds["XLAT"].isel(Time=0).values
+    lon = ds["XLONG"].isel(Time=0).values
+    lat_min, lat_max = float(lat.min()), float(lat.max())
+    lon_min, lon_max = float(lon.min()), float(lon.max())
+    lat_mid = (lat_min + lat_max) / 2
+    lon_mid = (lon_min + lon_max) / 2
+    print(f"WRF domain: {os.path.basename(wrf_file)}")
+    print(f"Latitude  range : {lat_min:.4f} to {lat_max:.4f} degrees")
+    print(f"Longitude range : {lon_min:.4f} to {lon_max:.4f} degrees")
+    print(f"Domain midpoint : ({lat_mid:.4f}, {lon_mid:.4f})")
+    ds.close()
+
 def requires_solar_for_channels(coef_file, selected_channels):
     channel_wavenumbers = parse_rttov_wavenumbers(coef_file)
     channel_info = classify_channels(channel_wavenumbers)
