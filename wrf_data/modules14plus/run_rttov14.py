@@ -820,7 +820,7 @@ def run_postprocessing():
             plot_rgb()
 
 def verification():
-    required_modules = ["satpy", "xesmf", "pyresample", "pyproj"]
+    required_modules = ["satpy", "pyresample"]
     for module in required_modules:
         try:
             importlib.import_module(module)
@@ -830,10 +830,7 @@ def verification():
             print("Exiting ..")
             sys.exit()
     from satpy import Scene
-    import xesmf as xe
-    from pyresample.geometry import AreaDefinition
-    from pyproj import CRS, Transformer
-    # from xesmf.util import add_corners
+    from pyresample.geometry import GridDefinition
     from modules14plus.satpy_readers import satpy_readers
     sensor_id = namelist["verification"]['satellite_sensor_id']
     keepRemappedEnabled = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['enabled']
@@ -855,65 +852,17 @@ def verification():
     if missing:
         raise ValueError(f"Channel(s) {missing} not found in the available datsets in the satellite datafile.\nAvailable datasets: {available}")
 
-    # all_scenes.load([all_scenes.all_dataset_names()[ii-1] for ii in satChannels000], calibration='radiance')
     all_scenes0.load(bandNames, calibration='radiance')
-    firstdata = all_scenes0[all_scenes0.available_dataset_names()[0]]
-    upscale_ratio = (wrffile.DX / firstdata.resolution) #/ 2
-    import warnings
-    warnings.filterwarnings(
-        "ignore",
-        category=UserWarning,
-        message=".*important projection information.*"
-    )
-    #area = firstdata.attrs['area'].compute_optimal_bb_area()
-    #new_scn = all_scenes0.resample(area)
-    #proj_source_dictionary = new_scn["M12"].attrs['area'].crs.to_dict()
-    proj_source_dictionary = firstdata.attrs['area'].crs.to_dict()
-    # proj_source_dictionary = firstdata.attrs['area'].proj_dict
-    proj_source = CRS.from_user_input(proj_source_dictionary)
-    proj_target = CRS.from_epsg(4326) # Define target CRS (WGS84 lat/lon)
-    transformer = Transformer.from_crs(proj_source, proj_target, always_xy=True)  # Build transformer
-
-    # Example: convert a point in UTM 38N to lat/lon
-    x, y = 600000, 4300000
-    lon, lat = transformer.transform(x, y)
-
-    # new_area = AreaDefinition(area_id=atts.area_id,
-    #                         description=atts.description,
-    #                         proj_id=atts.proj_id,
-    #                         projection=atts.proj_dict,
-    #                         width=int(atts.width/upscale_ratio),
-    #                         height=int(atts.height/upscale_ratio),
-    #                         area_extent=atts.area_extent)
-    # exit()
-    new_area = AreaDefinition(area_id="latlon_geo",
-                            description="upscaled data",
-                            proj_id="any_id",
-                            projection={'proj': 'longlat', 'datum': 'WGS84'},
-                            width=int(firstdata.x.size / upscale_ratio),
-                            height=int(firstdata.y.size / upscale_ratio),
-                            area_extent=[wrf.XLONG.min().item(), wrf.XLAT.min().item(), wrf.XLONG.max().item(), wrf.XLAT.max().item()])
-                            # area_extent=[40, 20, 65, 40])  #(ll_x, lower_left_y, ur_x, upper_right_y)
-
-    all_scenes = all_scenes0.resample(new_area)
-    scnArea = all_scenes[all_scenes._datasets.keys()[0].get("name")].attrs["area"]
-    lons, lats = scnArea.get_lonlats()
-    lons = np.where(np.isinf(lons), np.nan, lons)
-    lats = np.where(np.isinf(lats), np.nan, lats)
-    lat_wrf = wrf['XLAT'].isel(Time=0)
-    lon_wrf = wrf['XLONG'].isel(Time=0)
-    source_grid = xr.Dataset({'lat': (['y', 'x'], lats), 'lon': (['y', 'x'], lons)})
-    # source_grid = add_corners(source_grid)
-    target_grid = xr.Dataset({'lat': lat_wrf, 'lon': lon_wrf})
-    print("Regridding between the satellite and the WRF data.")
-    print("Can take a few minutes. Please wait ..")
-    regridder = xe.Regridder(source_grid, target_grid, method='bilinear') # mass conservative method for radiance as a flux
+    lat_wrf = wrf['XLAT'].isel(Time=0).values
+    lon_wrf = wrf['XLONG'].isel(Time=0).values
+    wrf_area = GridDefinition(lons=lon_wrf, lats=lat_wrf)
+    all_scenes = all_scenes0.resample(wrf_area)
     radiance_file = glob(os.path.join(postprocessingDir, "radiance*.nc"))
     if radiance_file:
         radiance_netcdf = xr.open_dataset(radiance_file[0])
     else:
         print("No radiance NetCDF file found in", postprocessingDir)
-        pirnt("Exiting ..")
+        print("Exiting ..")
         exit()
     bandName_iter = iter(bandNames)
     std_list = []
@@ -923,12 +872,18 @@ def verification():
         os.makedirs(verificationDir, exist_ok=True)
     for scn in all_scenes:
         print("Verification processing on the satellite", scn.attrs["platform_name"], "- band", scn.attrs["name"])
-        scn_regridded_to_wrf = regridder(scn)
+        scn_regridded_to_wrf = scn
         if keepRemappedEnabled:
             remappedFileName = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['remapped_file_name']
             band_name = scn.attrs["name"]
             print("Remapping satellite data on the WRF grid structure ..")
-            scn_regridded_to_wrf.to_dataset(name=band_name).drop_vars("crs").to_netcdf(os.path.join(verificationDir, remappedFileName + "_" + band_name + ".nc"))
+            ds_to_save = scn_regridded_to_wrf.to_dataset(name=band_name).drop_vars("crs", errors="ignore")
+            valid_netcdf_types = (str, int, float, np.ndarray, np.number, list, tuple, bytes)
+            for obj in [ds_to_save] + [ds_to_save[v] for v in ds_to_save.data_vars]:
+                obj.attrs = {k: int(v) if isinstance(v, (bool, np.bool_)) else
+                             (str(v) if not isinstance(v, valid_netcdf_types) else v)
+                             for k, v in obj.attrs.items() if k != "coordinates"}
+            ds_to_save.to_netcdf(os.path.join(verificationDir, remappedFileName + "_" + band_name + ".nc"))
         bandFromRadiation_xarray = radiance_netcdf[next(bandName_iter)]
         for key in ["units", "sensor", "name", "standard_name", "platform_name"]:
             value = scn.attrs.get(key)
