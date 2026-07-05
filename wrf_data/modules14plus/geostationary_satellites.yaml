@@ -1,0 +1,23 @@
+# Geostationary satellites: nominal sub-satellite longitude (degrees East, negative = West).
+# Satellites listed here skip the TLE/pyorbital step (pyorbital's SGP4 does not
+# support deep-space/geostationary orbits); latitude is 0.0 and altitude 35786 km.
+# Note: operational slots change over a satellite's lifetime (relocations, storage).
+# The values below are the best-known operational positions. For a simulation of a
+# period when the satellite was at a different slot, use the 'user_defined_position'
+# option in the namelist to override.
+Meteosat-7: 57.5      # IODC service (retired 2017)
+Meteosat-8: 41.5      # IODC service (retired 2022; earlier at 3.4W)
+Meteosat-9: 45.5      # IODC service
+Meteosat-10: 9.5      # Rapid Scanning Service (earlier at 0.0)
+Meteosat-11: 0.0      # Prime full-disc service
+Meteosat-12: 0.0      # MTG-I1, prime service
+GOES-13: -75.0        # GOES-East (retired 2018; now EWS-G1 at 61.5E)
+GOES-14: -105.0       # On-orbit storage
+GOES-15: -135.0       # GOES-West (retired 2023; storage at 128W)
+GOES-16: -75.2        # GOES-East
+Himawari-8: 140.7
+Himawari-9: 140.7
+INSAT-3D: 82.0
+FY-2D: 86.5
+FY-2E: 86.5           # Earlier at 105E, relocated 2015
+FY-2G: 99.5           # Relocated to 105E in 2018
