@@ -25,7 +25,6 @@ postprocessingEnabled = namelist["postprocessing"]['enabled']
 dust = namelist["wrfchem_dust_profiles"]['enabled']
 satelliteVerificationEnabled = namelist["verification"]['enabled']
 wrfFilePath = namelist["wrf_file_path"]
-# solar_radiation_simulation = namelist["solar_radiation_simulation"]
 wrfFileName = os.path.basename(wrfFilePath)
 wrffile = nc.Dataset(wrfFilePath)
 minuteArr = wrffile.variables["XTIME"]
@@ -83,9 +82,9 @@ def make_inputdata():
     from modules14plus.p_stag import compute_p_stag
     from modules14plus.rttov_utils import requires_solar_for_channels
     from modules14plus.choose_tle_source import choose_tle_source
+    import warnings
     disable_xarray()
 
-    # do_solar = int(namelist["solar_simulation"]['enabled'])
     solar_radiation_simulation = namelist["solar_simulation"]['enabled']
     # --- CHECK SOLAR REQUIREMENT ---
     need_solar, solar_channels, channel_info = requires_solar_for_channels(
@@ -158,7 +157,13 @@ def make_inputdata():
     sat_name = satNameFile[satIndex]
     sat_keyword = sat_name.split("-")[0].lower()
     if sat_keyword not in rttovCoef.lower():
-        raise ValueError(f"sat_name_index = {satIndex} refers to {sat_keyword} which doesn't coordinate with the satellite name in rttov_coefficient_file_path. \nRevise the satellite name or the coefficient file path in the namelist.")
+        warnings.warn(
+                f"sat_name_index = {satIndex} refers to '{sat_keyword}', which doesn't seem to match the "
+                "satellite name in 'rttov_coefficient_file_path'. "
+                "If this is a mismatch, revise either 'sat_name_index' or 'rttov_coefficient_file_path' in the namelist.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     try:
         pass
@@ -167,54 +172,53 @@ def make_inputdata():
     except Exception as error:
         print(f"An error occurred while creating {dirName}: {error}")
 
-    # orb = Orbital(satNameFile[satIndex])
-    # satPositions= orb.get_lonlatalt(observationTime) #Get longitude, latitude and altitude of the satellite
-    # satPositions = (136.85902196460546, -53.70781534686423, 715.6113205704698)
-    # if historicalTLE:
-    #     print("High precision satellite information enabled.")
-    # spacetrack_user = namelist["satellite_information"]["historical_tle"]["space-track.org_username"]
-    # spacetrack_password = namelist["satellite_information"]["historical_tle"]["space-track.org_password"]
-    # with open('modules14plus/satellite_to_norad_id.yaml', 'r') as yaml_file:
-    #     satellite_norad_ids = yaml.safe_load(yaml_file)
+    with open('modules14plus/geostationary_satellites.yaml', 'r') as yaml_file:
+        geoSatellites = yaml.safe_load(yaml_file)
 
-    tle_source_mode = choose_tle_source(observationTime, historicalTLE)
-    
-    try:
-        if tle_source_mode == "celestrak":
-            print(f"Using CelesTrak for {sat_name}")
-            orb = tle_fetcher.get_tle_celestrak(
-                sat_name,
-                satCelestrakUrls[sat_name]
-            )
-        else:
-            print(f"Using Space-Track (historical) for {sat_name}")
-            try:
-                if historicalTLE:
-                    print("High precision satellite information enabled.")
-                spacetrack_user = namelist["satellite_information"]["historical_tle"]["space-track.org_username"]
-                spacetrack_password = namelist["satellite_information"]["historical_tle"]["space-track.org_password"]
-                with open('modules14plus/satellite_to_norad_id.yaml', 'r') as yaml_file:
-                    satellite_norad_ids = yaml.safe_load(yaml_file)
-                orb = tle_fetcher.get_tle_spacetrack_history(
-                    sat_name,
-                    satellite_norad_ids[sat_name],
-                    observationTime,
-                    spacetrack_user,
-                    spacetrack_password
-                )
-            except Exception as e:
-                print(f"WARNING: Space-Track failed ({e}), falling back to CelesTrak")
+    if sat_name in geoSatellites:
+        # Geostationary orbits are not supported by pyorbital's SGP4 propagator,
+        # so the fixed nominal position is used instead of a TLE.
+        print(f"{sat_name} is geostationary. Using its nominal position (lon={geoSatellites[sat_name]}) instead of TLE.")
+        satPositions = (geoSatellites[sat_name], 0.0, 35786.0)
+    else:
+        tle_source_mode = choose_tle_source(observationTime, historicalTLE)
+
+        try:
+            if tle_source_mode == "celestrak":
+                print(f"Using CelesTrak for {sat_name}")
                 orb = tle_fetcher.get_tle_celestrak(
                     sat_name,
                     satCelestrakUrls[sat_name]
                 )
+            else:
+                print(f"Using Space-Track (historical) for {sat_name}")
+                try:
+                    if historicalTLE:
+                        print("High precision satellite information enabled.")
+                    spacetrack_user = namelist["satellite_information"]["historical_tle"]["space-track.org_username"]
+                    spacetrack_password = namelist["satellite_information"]["historical_tle"]["space-track.org_password"]
+                    with open('modules14plus/satellite_to_norad_id.yaml', 'r') as yaml_file:
+                        satellite_norad_ids = yaml.safe_load(yaml_file)
+                    orb = tle_fetcher.get_tle_spacetrack_history(
+                        sat_name,
+                        satellite_norad_ids[sat_name],
+                        observationTime,
+                        spacetrack_user,
+                        spacetrack_password
+                    )
+                except Exception as e:
+                    print(f"WARNING: Space-Track failed ({e}), falling back to CelesTrak")
+                    orb = tle_fetcher.get_tle_celestrak(
+                        sat_name,
+                        satCelestrakUrls[sat_name]
+                    )
 
-        satPositions = orb.get_lonlatalt(observationTime)
+            satPositions = orb.get_lonlatalt(observationTime)
 
-    except Exception as e:
-        raise RuntimeError(
-            f"FATAL: Failed to retrieve TLE and compute satellite position for {sat_name}: {e}"
-        )
+        except Exception as e:
+            raise RuntimeError(
+                f"FATAL: Failed to retrieve TLE and compute satellite position for {sat_name}: {e}"
+            )
 
     satAltitude = satPositions[2]
     if(angleEnable):
@@ -248,8 +252,6 @@ def make_inputdata():
     iimax = varShape[2]
     for jj in range(jjmax): #latitudesTemperature profile (K)
         for ii in range(iimax): #longitude
-    # for jj in range(3): #latitudesTemperature profile (K)
-    #     for ii in range(2): #longitude
             jjcount = jj+1
             iicount = ii+1
             print("Creating profile data for the grid point jj:", jjcount, "ii:", iicount)
@@ -299,7 +301,6 @@ def make_inputdata():
                 file_append.write(line)
             levelRange = list(range(varShape[0]))[::-1]
             for level in levelRange:
-                # pointValue = tempLevel[tt,level,jj,ii]
                 pointValue = tempLevel[level,jj,ii]
                 file_append.write(str(pointValue)+'\n')
             
@@ -359,7 +360,6 @@ def make_inputdata():
                 ]
             for line in subHead:
                 file_append.write(line)
-            # observerAltitude = np.round(modelheight[jj, ii]/9810, 4)
             observerAltitude = modelheight[jj, ii]/1000
             elevation = [observerAltitude, lat[jj, ii], lon[jj, ii]]
             elevation_2line = ' '.join(map(str, elevation))
@@ -424,7 +424,14 @@ def make_inputdata():
     else:
         aerosol_coefficient_file_path = namelist["wrfchem_dust_profiles"]['aerosol_coefficient_file_path']
         if sat_keyword not in aerosol_coefficient_file_path.lower():
-            raise ValueError(f"sat_name_index = {satIndex} refers to {sat_keyword} which doesn't coordinate with the satellite name in aerosol_coefficient_file_path. \nRevise the satellite name or the coefficient file path in the namelist.")
+            warnings.warn(
+                            f"sat_name_index = {satIndex} refers to '{sat_keyword}', which doesn't seem to match the "
+                            "satellite name in 'rttov_coefficient_file_path'. "
+                            "If this is a mismatch, revise either 'sat_name_index' or 'rttov_coefficient_file_path' in the namelist.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
+
         if not os.path.exists(aerosol_coefficient_file_path):
             print("Warning:", aerosol_coefficient_file_path, "is not a valid file path.")
             print("Exiting ..")
@@ -820,7 +827,7 @@ def run_postprocessing():
             plot_rgb()
 
 def verification():
-    required_modules = ["satpy", "xesmf", "pyresample", "pyproj"]
+    required_modules = ["satpy", "pyresample"]
     for module in required_modules:
         try:
             importlib.import_module(module)
@@ -830,10 +837,7 @@ def verification():
             print("Exiting ..")
             sys.exit()
     from satpy import Scene
-    import xesmf as xe
-    from pyresample.geometry import AreaDefinition
-    from pyproj import CRS, Transformer
-    # from xesmf.util import add_corners
+    from pyresample.geometry import GridDefinition
     from modules14plus.satpy_readers import satpy_readers
     sensor_id = namelist["verification"]['satellite_sensor_id']
     keepRemappedEnabled = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['enabled']
@@ -855,65 +859,17 @@ def verification():
     if missing:
         raise ValueError(f"Channel(s) {missing} not found in the available datsets in the satellite datafile.\nAvailable datasets: {available}")
 
-    # all_scenes.load([all_scenes.all_dataset_names()[ii-1] for ii in satChannels000], calibration='radiance')
     all_scenes0.load(bandNames, calibration='radiance')
-    firstdata = all_scenes0[all_scenes0.available_dataset_names()[0]]
-    upscale_ratio = (wrffile.DX / firstdata.resolution) #/ 2
-    import warnings
-    warnings.filterwarnings(
-        "ignore",
-        category=UserWarning,
-        message=".*important projection information.*"
-    )
-    #area = firstdata.attrs['area'].compute_optimal_bb_area()
-    #new_scn = all_scenes0.resample(area)
-    #proj_source_dictionary = new_scn["M12"].attrs['area'].crs.to_dict()
-    proj_source_dictionary = firstdata.attrs['area'].crs.to_dict()
-    # proj_source_dictionary = firstdata.attrs['area'].proj_dict
-    proj_source = CRS.from_user_input(proj_source_dictionary)
-    proj_target = CRS.from_epsg(4326) # Define target CRS (WGS84 lat/lon)
-    transformer = Transformer.from_crs(proj_source, proj_target, always_xy=True)  # Build transformer
-
-    # Example: convert a point in UTM 38N to lat/lon
-    x, y = 600000, 4300000
-    lon, lat = transformer.transform(x, y)
-
-    # new_area = AreaDefinition(area_id=atts.area_id,
-    #                         description=atts.description,
-    #                         proj_id=atts.proj_id,
-    #                         projection=atts.proj_dict,
-    #                         width=int(atts.width/upscale_ratio),
-    #                         height=int(atts.height/upscale_ratio),
-    #                         area_extent=atts.area_extent)
-    # exit()
-    new_area = AreaDefinition(area_id="latlon_geo",
-                            description="upscaled data",
-                            proj_id="any_id",
-                            projection={'proj': 'longlat', 'datum': 'WGS84'},
-                            width=int(firstdata.x.size / upscale_ratio),
-                            height=int(firstdata.y.size / upscale_ratio),
-                            area_extent=[wrf.XLONG.min().item(), wrf.XLAT.min().item(), wrf.XLONG.max().item(), wrf.XLAT.max().item()])
-                            # area_extent=[40, 20, 65, 40])  #(ll_x, lower_left_y, ur_x, upper_right_y)
-
-    all_scenes = all_scenes0.resample(new_area)
-    scnArea = all_scenes[all_scenes._datasets.keys()[0].get("name")].attrs["area"]
-    lons, lats = scnArea.get_lonlats()
-    lons = np.where(np.isinf(lons), np.nan, lons)
-    lats = np.where(np.isinf(lats), np.nan, lats)
-    lat_wrf = wrf['XLAT'].isel(Time=0)
-    lon_wrf = wrf['XLONG'].isel(Time=0)
-    source_grid = xr.Dataset({'lat': (['y', 'x'], lats), 'lon': (['y', 'x'], lons)})
-    # source_grid = add_corners(source_grid)
-    target_grid = xr.Dataset({'lat': lat_wrf, 'lon': lon_wrf})
-    print("Regridding between the satellite and the WRF data.")
-    print("Can take a few minutes. Please wait ..")
-    regridder = xe.Regridder(source_grid, target_grid, method='bilinear') # mass conservative method for radiance as a flux
+    lat_wrf = wrf['XLAT'].isel(Time=0).values
+    lon_wrf = wrf['XLONG'].isel(Time=0).values
+    wrf_area = GridDefinition(lons=lon_wrf, lats=lat_wrf)
+    all_scenes = all_scenes0.resample(wrf_area)
     radiance_file = glob(os.path.join(postprocessingDir, "radiance*.nc"))
     if radiance_file:
         radiance_netcdf = xr.open_dataset(radiance_file[0])
     else:
         print("No radiance NetCDF file found in", postprocessingDir)
-        pirnt("Exiting ..")
+        print("Exiting ..")
         exit()
     bandName_iter = iter(bandNames)
     std_list = []
@@ -923,12 +879,18 @@ def verification():
         os.makedirs(verificationDir, exist_ok=True)
     for scn in all_scenes:
         print("Verification processing on the satellite", scn.attrs["platform_name"], "- band", scn.attrs["name"])
-        scn_regridded_to_wrf = regridder(scn)
+        scn_regridded_to_wrf = scn
         if keepRemappedEnabled:
             remappedFileName = namelist["verification"]['keep_remapped_satellite_to_wrf_data']['remapped_file_name']
             band_name = scn.attrs["name"]
             print("Remapping satellite data on the WRF grid structure ..")
-            scn_regridded_to_wrf.to_dataset(name=band_name).drop_vars("crs").to_netcdf(os.path.join(verificationDir, remappedFileName + "_" + band_name + ".nc"))
+            ds_to_save = scn_regridded_to_wrf.to_dataset(name=band_name).drop_vars("crs", errors="ignore")
+            valid_netcdf_types = (str, int, float, np.ndarray, np.number, list, tuple, bytes)
+            for obj in [ds_to_save] + [ds_to_save[v] for v in ds_to_save.data_vars]:
+                obj.attrs = {k: int(v) if isinstance(v, (bool, np.bool_)) else
+                             (str(v) if not isinstance(v, valid_netcdf_types) else v)
+                             for k, v in obj.attrs.items() if k != "coordinates"}
+            ds_to_save.to_netcdf(os.path.join(verificationDir, remappedFileName + "_" + band_name + ".nc"))
         bandFromRadiation_xarray = radiance_netcdf[next(bandName_iter)]
         for key in ["units", "sensor", "name", "standard_name", "platform_name"]:
             value = scn.attrs.get(key)
