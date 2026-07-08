@@ -176,37 +176,47 @@ def make_inputdata():
         with open('modules14plus/satellite_to_norad_id.yaml', 'r') as yaml_file:
             satellite_norad_ids = yaml.safe_load(yaml_file)
 
-    tle_source_mode = choose_tle_source(observationTime, historicalTLE)
     sat_name = satNameFile[satIndex]
-    try:
-        if tle_source_mode == "celestrak":
-            print(f"Using CelesTrak for {sat_name}")
-            orb = tle_fetcher.get_tle_celestrak(
-                sat_name,
-                satCelestrakUrls[sat_name]
-            )
-        else:
-            print(f"Using Space-Track (historical) for {sat_name}")
-            try:
-                orb = tle_fetcher.get_tle_spacetrack_history(
-                    sat_name,
-                    satellite_norad_ids[sat_name],
-                    observationTime,
-                    spacetrack_user,
-                    spacetrack_password
-                )
-            except Exception as e:
-                print(f"WARNING: Space-Track failed ({e}), falling back to CelesTrak")
 
+    with open('modules14plus/geostationary_satellites.yaml', 'r') as yaml_file:
+        geoSatellites = yaml.safe_load(yaml_file)
+
+    if sat_name in geoSatellites:
+        # Geostationary orbits are not supported by pyorbital's SGP4 propagator,
+        # so the fixed nominal position is used instead of a TLE.
+        print(f"{sat_name} is geostationary. Using its nominal position (lon={geoSatellites[sat_name]}) instead of TLE.")
+        satPositions = (geoSatellites[sat_name], 0.0, 35786.0)
+    else:
+        tle_source_mode = choose_tle_source(observationTime, historicalTLE)
+        try:
+            if tle_source_mode == "celestrak":
+                print(f"Using CelesTrak for {sat_name}")
                 orb = tle_fetcher.get_tle_celestrak(
                     sat_name,
                     satCelestrakUrls[sat_name]
                 )
-        satPositions = orb.get_lonlatalt(observationTime)
-    except Exception as e:
-        raise RuntimeError(
-            f"FATAL: Failed to retrieve TLE and compute satellite position for {sat_name}: {e}"
-        )
+            else:
+                print(f"Using Space-Track (historical) for {sat_name}")
+                try:
+                    orb = tle_fetcher.get_tle_spacetrack_history(
+                        sat_name,
+                        satellite_norad_ids[sat_name],
+                        observationTime,
+                        spacetrack_user,
+                        spacetrack_password
+                    )
+                except Exception as e:
+                    print(f"WARNING: Space-Track failed ({e}), falling back to CelesTrak")
+
+                    orb = tle_fetcher.get_tle_celestrak(
+                        sat_name,
+                        satCelestrakUrls[sat_name]
+                    )
+            satPositions = orb.get_lonlatalt(observationTime)
+        except Exception as e:
+            raise RuntimeError(
+                f"FATAL: Failed to retrieve TLE and compute satellite position for {sat_name}: {e}"
+            )
 
     satAltitude = satPositions[2]
 
