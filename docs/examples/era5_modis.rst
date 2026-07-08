@@ -499,7 +499,7 @@ For example, the simulated brightness temperature for MODIS band 27 is saved as
 .. image:: brightness_temperature_band27.png
    :alt: Simulated MODIS band 27 brightness temperature from ERA5 using RTTOVpy
    :align: center
-   :width: 60%
+   :width: 99%
 
 This figure shows the spatial distribution of the simulated brightness
 temperature for MODIS band 27 over the selected ERA5 simulation domain.
