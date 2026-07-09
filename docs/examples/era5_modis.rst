@@ -503,3 +503,31 @@ For example, the simulated brightness temperature for MODIS band 27 is saved as
 
 This figure shows the spatial distribution of the simulated brightness
 temperature for MODIS band 27 over the selected ERA5 simulation domain.
+
+The Modis band 18 is empty, as this band is a solar channel with less than 3 micrometers wavelength. Brightness
+temperature is not defined for solar channels, so the corresponding output is zero.
+
+The radiance for band 18 is saved as
+
+.. code-block:: text
+
+    modis_rttov_outputs_postprocessing/radiance_band18.png
+
+.. image:: radiance_band18.png
+   :alt: Simulated MODIS band 18 radiance from ERA5 using RTTOVpy
+   :align: center
+   :width: 99%
+
+and the radiance for band 27 is saved as
+
+.. code-block:: text
+
+    modis_rttov_outputs_postprocessing/radiance_band27.png
+
+.. image:: radiance_band27.png
+   :alt: Simulated MODIS band 27 radiance from ERA5 using RTTOVpy
+   :align: center
+   :width: 99%
+
+All pictures were generated using the NetCDF outputs of the RTTOV simulations. 
+The NetCDF files can also be used by the user for further analysis.
