@@ -43,4 +43,5 @@ Features
    :maxdepth: 2
    :caption: Examples
 
-   examples/era5_modis
+   examples/era5/index
+   examples/wrf/index

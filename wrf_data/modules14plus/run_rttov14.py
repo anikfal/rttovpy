@@ -183,12 +183,16 @@ def make_inputdata():
     else:
         tle_source_mode = choose_tle_source(observationTime, historicalTLE)
 
+        with open('modules14plus/satellite_to_norad_id.yaml', 'r') as yaml_file:
+            satellite_norad_ids = yaml.safe_load(yaml_file)
+
         try:
             if tle_source_mode == "celestrak":
                 print(f"Using CelesTrak for {sat_name}")
                 orb = tle_fetcher.get_tle_celestrak(
                     sat_name,
-                    satCelestrakUrls[sat_name]
+                    satCelestrakUrls[sat_name],
+                    satellite_norad_ids.get(sat_name)
                 )
             else:
                 print(f"Using Space-Track (historical) for {sat_name}")
@@ -197,8 +201,6 @@ def make_inputdata():
                         print("High precision satellite information enabled.")
                     spacetrack_user = namelist["satellite_information"]["historical_tle"]["space-track.org_username"]
                     spacetrack_password = namelist["satellite_information"]["historical_tle"]["space-track.org_password"]
-                    with open('modules14plus/satellite_to_norad_id.yaml', 'r') as yaml_file:
-                        satellite_norad_ids = yaml.safe_load(yaml_file)
                     orb = tle_fetcher.get_tle_spacetrack_history(
                         sat_name,
                         satellite_norad_ids[sat_name],
@@ -210,7 +212,8 @@ def make_inputdata():
                     print(f"WARNING: Space-Track failed ({e}), falling back to CelesTrak")
                     orb = tle_fetcher.get_tle_celestrak(
                         sat_name,
-                        satCelestrakUrls[sat_name]
+                        satCelestrakUrls[sat_name],
+                        satellite_norad_ids.get(sat_name)
                     )
 
             satPositions = orb.get_lonlatalt(observationTime)
