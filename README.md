@@ -4,6 +4,8 @@
 
 # RTTOVpy
 
+[![DOI](https://zenodo.org/badge/923596617.svg)](https://doi.org/10.5281/zenodo.21298079)
+
 **RTTOVpy** is a Python application for preparing RTTOV input profiles
 from **WRF** model outputs or **ERA5** reanalysis data, executing the
 **RTTOV** forward model, post-processing the results into georeferenced
@@ -108,11 +110,3 @@ available.
 ## License
 
 RTTOVpy is released under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-------------------------------------------------------------------------
-
-## Author
-
-**Amirhossein Nikfal**
-
-Website: https://www.amirnikfal.com/
