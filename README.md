@@ -97,6 +97,9 @@ The complete user guide, tutorials, and examples are available at:
 
 **https://rttovpy.readthedocs.io/**
 
+Video tutorials are available in the RTTOV model
+[YouTube playlist](https://youtube.com/playlist?list=PL93HaRiv5QkAL-EzzCXIKaAfkclWuYyyH).
+
 ------------------------------------------------------------------------
 
 ## Citation

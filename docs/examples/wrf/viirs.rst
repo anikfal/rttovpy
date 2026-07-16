@@ -11,126 +11,130 @@ the WRF output, extracts the required atmospheric and surface variables, creates
 RTTOV profile input files for each WRF grid point, and generates a shell script
 for running the RTTOV forward model.
 
-## Example configuration
+Example configuration
+---------------------
 
-The example is controlled by the `namelist_wrf.yaml` configuration file. The
+The example is controlled by the ``namelist_wrf.yaml`` configuration file. The
 main WRF and RTTOV settings are:
 
 .. code-block:: yaml
 
-rttov_version: 14
-rttov_installation_path: /home/anikfal/WRFDA/rttov14
-rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov14/rtcoef_rttov14/rttov13pred54L/rtcoef_noaa_20_viirs_o3co2.dat
+   rttov_version: 14
+   rttov_installation_path: /home/anikfal/WRFDA/rttov14
+   rttov_coefficient_file_path: /home/anikfal/WRFDA/rttov14/rtcoef_rttov14/rttov13pred54L/rtcoef_noaa_20_viirs_o3co2.dat
 
-solar_simulation:
-enabled: true
+   solar_simulation:
+     enabled: true
 
-wrf_file_path: /home/anikfal/postwrf/zkuwaitoutputs/wrfout_d01_2022-05-15_00_kuwait
+   wrf_file_path: /home/anikfal/postwrf/zkuwaitoutputs/wrfout_d01_2022-05-15_00_kuwait
 
-time_of_simulation:
-year: 2022
-month: 5
-day: 16
-hour: 10
+   time_of_simulation:
+     year: 2022
+     month: 5
+     day: 16
+     hour: 10
 
-rttov_inputdata_directory_suffix: inputsviirs
-rttov_outputdata_directory_suffix: outputsviirs
+   rttov_inputdata_directory_suffix: inputsviirs
+   rttov_outputdata_directory_suffix: outputsviirs
 
-## Satellite configuration
+Satellite configuration
+-----------------------
 
 The NOAA-20 VIIRS sensor is selected through the RTTOV coefficient file and the
-satellite index in `satellite_information`. In this example, RTTOV channels
-17, 18, and 19 are selected, corresponding to VIIRS bands `M12`, `M13`, and
-`M14`.
+satellite index in ``satellite_information``. In this example, RTTOV channels
+17, 18, and 19 are selected, corresponding to VIIRS bands ``M12``, ``M13``, and
+``M14``.
 
 .. code-block:: yaml
 
-satellite_information:
-sat_name_index: 20
-sat_channel_list: [17, 18, 19]
-sat_channel_names: [M12, M13, M14]
-user_defined_position:
-enabled: true
-sat_latitude: 38
-sat_longitude: 45
-historical_tle:
-enabled: true
-space-track.org_username: your_username
-space-track.org_password: your_password
+   satellite_information:
+     sat_name_index: 20
+     sat_channel_list: [17, 18, 19]
+     sat_channel_names: [M12, M13, M14]
+     user_defined_position:
+       enabled: true
+       sat_latitude: 38
+       sat_longitude: 45
+     historical_tle:
+       enabled: true
+       space-track.org_username: your_username
+       space-track.org_password: your_password
 
 Since the selected channel list includes a solar channel, solar simulation is
 enabled. RTTOVpy reports this at runtime:
 
 .. code-block:: console
 
-Channels requiring solar: [17]
+   Channels requiring solar: [17]
 
-## Running RTTOVpy
+Running RTTOVpy
+---------------
 
-From the directory containing `rttovpy.py` and `namelist_wrf.yaml`, run:
+From the directory containing ``rttovpy.py`` and ``namelist_wrf.yaml``, run:
 
 .. code-block:: console
 
-python rttovpy.py
+   python rttovpy.py
 
 RTTOVpy then creates a new input directory using the WRF filename and the
 configured suffix:
 
 .. code-block:: console
 
-Directory wrfout_d01_2022-05-15_00_kuwait_inputsviirs/ has been created to store profile datafiles.
+   Directory wrfout_d01_2022-05-15_00_kuwait_inputsviirs/ has been created to store profile datafiles.
 
 For this example, a user-defined satellite position is used:
 
 .. code-block:: console
 
-Simulation with user defined satellite position:
+   Simulation with user defined satellite position:
 
 RTTOVpy creates one profile file for each WRF grid point. In this case, the WRF
 domain contains 62 × 62 grid points, resulting in 3,844 RTTOV profile files.
 
 .. code-block:: console
 
-Creating profile data for the grid point jj: 1 ii: 1
-Creating profile data for the grid point jj: 1 ii: 2
-Creating profile data for the grid point jj: 1 ii: 3
-...
-Creating profile data for the grid point jj: 62 ii: 60
-Creating profile data for the grid point jj: 62 ii: 61
-Creating profile data for the grid point jj: 62 ii: 62
+   Creating profile data for the grid point jj: 1 ii: 1
+   Creating profile data for the grid point jj: 1 ii: 2
+   Creating profile data for the grid point jj: 1 ii: 3
+   ...
+   Creating profile data for the grid point jj: 62 ii: 60
+   Creating profile data for the grid point jj: 62 ii: 61
+   Creating profile data for the grid point jj: 62 ii: 62
 
 After all profile files are created, RTTOVpy generates the shell script used to
 run the RTTOV forward model:
 
 .. code-block:: console
 
-==================================================================
-Making the shellscript application for the RTTOV forward model ...
-The file run_wrf_example_fwd.sh has been made successfully.
+   ==================================================================
+   Making the shellscript application for the RTTOV forward model ...
+   The file run_wrf_example_fwd.sh has been made successfully.
 
-## Generated files
+Generated files
+---------------
 
 After this step, the main generated outputs are the RTTOV input profile
 directory and the forward-model shell script.
 
 .. code-block:: console
 
-$ ls wrfout_d01_2022-05-15_00_kuwait_inputsviirs/ | head
-prof-000001.dat
-prof-000002.dat
-prof-000003.dat
-prof-000004.dat
-prof-000005.dat
-prof-000006.dat
-prof-000007.dat
-prof-000008.dat
-prof-000009.dat
-prof-000010.dat
+   $ ls wrfout_d01_2022-05-15_00_kuwait_inputsviirs/ | head
+   prof-000001.dat
+   prof-000002.dat
+   prof-000003.dat
+   prof-000004.dat
+   prof-000005.dat
+   prof-000006.dat
+   prof-000007.dat
+   prof-000008.dat
+   prof-000009.dat
+   prof-000010.dat
 
 .. code-block:: console
 
-$ ls run_wrf_example_fwd.sh
-run_wrf_example_fwd.sh
+   $ ls run_wrf_example_fwd.sh
+   run_wrf_example_fwd.sh
 
 At this stage, the WRF fields have been converted into RTTOV-compatible profile
 input files, and the example is ready for running the RTTOV forward simulation.
