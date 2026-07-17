@@ -139,7 +139,7 @@ def make_inputdata():
     u10 = surface_ds.u10.values
     v10 = surface_ds.v10.values
     skinT = surface_ds.skt.values
-    landSeaMask = surface_ds.lsm.values
+    landSeaMask = 1 - surface_ds.lsm.values
     geopotential = surface_ds.z.values
     cloudFraction = surface_ds.tcc.values
 
@@ -288,7 +288,7 @@ def make_inputdata():
 
                 # --- Surface ---
                 f.write("! Surface type (0=land, 1=sea, 2=sea-ice) and water type (0=fresh, 1=ocean)\n!\n")
-                f.write(f"   {int(landSeaMask[jj,ii])}         1\n!\n")
+                f.write(f"   {round(landSeaMask[jj,ii])}         1\n!\n")
 
                 # --- Elevation ---
                 f.write("! Elevation (km), latitude and longitude (degrees)\n!\n")
@@ -308,10 +308,9 @@ def make_inputdata():
 
                 satZen = 90 - obs[1][0]
                 satAz = obs[0][0]
-
-                sun = get_alt_az(observationTime, lon[ii], lat[jj])
-                sunZen = sun[0] * 180 / pi
-                sunAz = sun[1] * 180 / pi
+                sunAlt, sunAz = get_alt_az(observationTime, lon[ii], lat[jj])  # radians
+                sunZen = 90.0 - np.rad2deg(sunAlt)   # zenith angle, degrees
+                sunAz  = np.rad2deg(sunAz) % 360.0          # azimuth, degrees (compass bearing, 0=N)
 
                 f.write(f"   {satZen:.3f}     {satAz:.3f}     {sunZen:.3f}     {sunAz:.3f}\n!\n")
 
