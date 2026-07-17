@@ -234,7 +234,10 @@ def make_inputdata():
 
     t2m = getvar(wrffile, "T2", timeidx=observationIndex)
     # d2m = getvar(wrffile, "td2", timeidx=observationIndex)+273.15
-    qv = getvar(wrffile, "QVAPOR", timeidx=observationIndex)
+    qv = getvar(wrffile, "QVAPOR", timeidx=observationIndex)  # mixing ratio
+    qv = qv / (1.0 + qv)  # vapor in moist air
+    q2m = getvar(wrffile, "Q2", timeidx=observationIndex)  # 2m mixing ratio
+    q2m = q2m / (1.0 + q2m)  # 2m vapor in moist air
     u10 = getvar(wrffile, "U10", timeidx=observationIndex)
     v10 = getvar(wrffile, "V10", timeidx=observationIndex)
     skinT = getvar(wrffile, "TSK", timeidx=observationIndex)
@@ -242,7 +245,7 @@ def make_inputdata():
     modelheight = getvar(wrffile, "HGT", timeidx=observationIndex) #altitude
     cloudFraction000 = getvar(wrffile, "cloudfrac", timeidx=observationIndex)
     cloudFraction = np.maximum.reduce([cloudFraction000[0,:,:], cloudFraction000[1,:,:], cloudFraction000[2,:,:]]) #maximum values
-    q2m = qv[0,:,:]
+    # q2m = qv[0,:,:]
     lat = getvar(wrffile, "lat", timeidx=observationIndex)
     lon = getvar(wrffile, "lon", timeidx=observationIndex)
     tempLevel = getvar(wrffile, "tk", timeidx=observationIndex)
@@ -378,9 +381,10 @@ def make_inputdata():
             userdefSatPos = get_observer_look(satLon, satLat, satAltitude, observationTime, np.array([lon[jj, ii]], dtype=np.float32), np.array([lat[jj, ii]], dtype=np.float32), np.array([observerAltitude], dtype=np.float32))
             satAzimuth = userdefSatPos[0]
             satZenith = 90 - userdefSatPos[1]
-            sunPositions = get_alt_az(observationTime, lon[jj, ii], lat[jj, ii])
-            sunZenith = sunPositions[0] * 180/pi
-            sunAzimuth = sunPositions[1] * 180/pi
+            sunAlt, sunAz = get_alt_az(observationTime, lon[jj, ii], lat[jj, ii])  # radians
+            sunZenith = 90.0 - np.rad2deg(sunAlt)   # zenith angle, degrees
+            sunAzimuth  = np.rad2deg(sunAz) % 360.0          # azimuth, degrees (compass bearing, 0=N)
+
             satsunAngles = np.round([satZenith[0], satAzimuth[0], sunZenith, sunAzimuth], 2)
             satsunAngles_2line = ' '.join(map(str, satsunAngles))
             file_append.write(satsunAngles_2line)
