@@ -817,7 +817,7 @@ def verification():
         scn_regridded_to_wrf_ref = scn_regridded_to_wrf_ref[mask]
         bandFromWRFRadiation_xarray_ref = bandFromWRFRadiation_xarray_ref[mask]
         std_list.append(np.std(bandFromWRFRadiation_xarray_ref)/np.std(scn_regridded_to_wrf_ref))
-        rmse_list.append( (np.sqrt(np.mean((bandFromWRFRadiation_xarray_ref - scn_regridded_to_wrf_ref) ** 2))) / np.mean(bandFromWRFRadiation_xarray_ref) )
+        rmse_list.append( np.sqrt(np.mean(((bandFromWRFRadiation_xarray_ref - bandFromWRFRadiation_xarray_ref.mean()) - (scn_regridded_to_wrf_ref - scn_regridded_to_wrf_ref.mean())) ** 2)) / np.std(scn_regridded_to_wrf_ref) )
         cor_list.append(np.corrcoef(scn_regridded_to_wrf_ref, bandFromWRFRadiation_xarray_ref)[0, 1])
 
     required_modules = ["matplotlib.pyplot", "geocat.viz"]
