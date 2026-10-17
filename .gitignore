@@ -1,5 +1,10 @@
 wrf_data/wrfout_d0*
 CURRENT_STATE.md
-*input*
-*output*
 tle_cache/
+__pycache__/
+
+# input data
+*.grib
+
+# output directories (directories only, not files)
+*_outputs*/
